@@ -1463,6 +1463,7 @@ periodInput.value = state.periodLabel || "";
 periodInput.addEventListener("input", () => {
   state.periodLabel = periodInput.value.trim().slice(0, 40);
   save();
+  renderResult();
 });
 document.getElementById("btn-lang").onclick = () => setLang(lang === "zh" ? "en" : "zh");
 document.getElementById("btn-theme").onclick = () => cycleTheme();
