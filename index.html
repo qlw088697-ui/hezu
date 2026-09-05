@@ -102,11 +102,12 @@
 <body>
 <header>
   <div class="wrap">
-    <h1>🏠 合租账本 <span style="font-weight:400;font-size:15px;opacity:.8">HeZu</span></h1>
-    <p>合租费用分摊计算器 · 均摊 / 按权重 / 抄表计费 / 垫付结算 · 数据只存在你的浏览器里</p>
+    <h1>🏠 <span id="t-app-title">合租账本</span> <span style="font-weight:400;font-size:15px;opacity:.8">HeZu</span></h1>
+    <p id="t-sub">合租费用分摊计算器 · 均摊 / 按权重 / 抄表计费 / 垫付结算 · 数据只存在你的浏览器里</p>
     <div class="month-row">
-      <label for="month">账单月份</label>
+      <label for="month" id="t-month-label">账单月份</label>
       <input type="month" id="month">
+      <button class="mini" id="btn-lang" style="margin-left:auto;background:rgba(255,255,255,.16);border-color:transparent;color:#fff" title="切换语言 / Switch language">EN</button>
     </div>
   </div>
 </header>
@@ -114,27 +115,27 @@
 <main class="wrap">
 
   <section id="sec-members">
-    <h2>👥 租客 <span class="tag" id="member-count"></span><span class="grow"></span>
+  <h2>👥 <span id="t-h-members">租客</span> <span class="tag" id="member-count"></span><span class="grow"></span>
       <button class="primary mini" id="btn-add-member">＋ 添加租客</button></h2>
-    <p class="hint">权重用于"按权重"分摊:比如主卧 1.5、次卧 1。均摊模式不受权重影响。</p>
+  <p class="hint" id="t-hint-members">权重用于"按权重"分摊:比如主卧 1.5、次卧 1。均摊模式不受权重影响。</p>
     <div id="members"></div>
   </section>
 
   <section id="sec-bills">
-    <h2>🧾 账单项(房租、网络、清洁用品…)<span class="grow"></span>
+    <h2>🧾 <span id="t-h-bills">账单项(房租、网络、清洁用品…)</span><span class="grow"></span>
       <button class="primary mini" id="btn-add-bill">＋ 添加账单</button></h2>
     <div id="bills"></div>
   </section>
 
   <section id="sec-meters">
-    <h2>💡 抄表计费(水、电、燃气)<span class="grow"></span>
+  <h2>💡 <span id="t-h-meters">抄表计费(水、电、燃气)</span><span class="grow"></span>
       <button class="primary mini" id="btn-add-meter">＋ 添加抄表</button></h2>
-    <p class="hint">填上期/本期读数和单价,自动算出金额(本期读数应 ≥ 上期读数)。</p>
+  <p class="hint" id="t-hint-meters">填上期/本期读数和单价,自动算出金额(本期读数应 ≥ 上期读数)。</p>
     <div id="meters"></div>
   </section>
 
   <section id="sec-result">
-    <h2>💰 结算结果 <span class="tag" id="total-tag"></span></h2>
+    <h2>💰 <span id="t-h-result">结算结果</span> <span class="tag" id="total-tag"></span></h2>
     <div id="result"></div>
     <div style="margin-top:14px" class="row-between">
       <span class="hint grow" id="settle-hint"></span>
@@ -145,7 +146,7 @@
   </section>
 
   <section id="sec-tools">
-    <h2>🗄️ 保存与记录</h2>
+    <h2>🗄️ <span id="t-h-tools">保存与记录</span></h2>
     <div class="row-between" style="margin-top:10px">
       <button class="primary" id="btn-save">保存本月到历史</button>
       <span class="grow"></span>
@@ -160,12 +161,130 @@
 
 </main>
 
-<footer>HeZu v1.2 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器 ·
+<footer><span id="t-footer">HeZu v1.3 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器</span> ·
   <a href="https://github.com/qlw088697-ui/hezu" target="_blank" rel="noopener">GitHub</a></footer>
 <div class="toast" id="toast"></div>
 
 <script>
 "use strict";
+/* ---------- 多语言 ---------- */
+const I18N = {
+  zh: {
+    appTitle: "合租账本",
+    tagline: "合租费用分摊计算器 · 均摊 / 按权重 / 抄表计费 / 垫付结算 · 数据只存在你的浏览器里",
+    monthLabel: "账单月份",
+    membersTitle: "租客", addMember: "＋ 添加租客",
+    membersHint: "权重用于\"按权重\"分摊:比如主卧 1.5、次卧 1。均摊模式不受权重影响。",
+    peopleSuffix: " 人", membersEmptyTag: "还没添加",
+    emptyMembers: "还没有租客,点右上角\"添加租客\"开始 🎉",
+    loadSample: "🎁 一键载入示例数据",
+    namePh: "姓名", weight: "权重", del: "删除",
+    addMembersFirst: "先添加租客", selectAll: "全选", selectAllTip: "一键全选/清空",
+    modeEqual: "均摊", modeWeight: "按权重", modeCustom: "自定义份额",
+    noPayer: "(无人垫付)",
+    billsTitle: "账单项(房租、网络、清洁用品…)", addBill: "＋ 添加账单",
+    emptyBills: "暂无账单项,点\"添加账单\"录入房租、网络费等",
+    billNamePh: "账单名称", amountLabel: "金额(元)", splitLabel: "分摊方式", payerLabel: "垫付人",
+    participantsLabel: "参与人(点击切换)", shareOf: "{n} 承担(元)",
+    sumOk: "✓ 份额合计 {x}", sumDiff: "份额合计 {a},与金额相差 {b},请核对",
+    metersTitle: "抄表计费(水、电、燃气)", addMeter: "＋ 添加抄表",
+    metersHint: "填上期/本期读数和单价,自动算出金额(本期读数应 ≥ 上期读数)。",
+    meterNamePh: "如:电费", prevLabel: "上期读数", currLabel: "本期读数", priceLabel: "单价(元/度·吨·方)",
+    readWarn: "本期读数小于上期,请检查",
+    emptyMeters: "暂无抄表项,点\"添加抄表\"录入水/电/燃气读数",
+    resultTitle: "结算结果", totalTag: "本月总支出 {x}",
+    emptyResult: "添加租客后,这里会显示每人应付和互相转账方案",
+    thMember: "租客", thOwed: "应付", thPaid: "已垫付", thNet: "净额(正=应收)",
+    transfersTitle: "转账方案(按此转账即可两清):",
+    settledNone: "✅ 账目已两清,无需转账", noInternal: "组内无需互相转账",
+    unpaidWarn: "⚠️ 有 {x} 的支出没有填垫付人,这部分金额不会出现在转账方案里(请自行缴纳或补填垫付人)",
+    abnormalWarn: "⚠️ 有抄表项本期读数小于上期,请检查后重新计算",
+    copyText: "📋 复制为文本(发群里)", copyShare: "🔗 复制分享链接", printBtn: "🖨️ 打印 / 存 PDF",
+    settleHint: "共 {e} 笔支出 · {b} 笔账单 + {m} 项抄表",
+    toolsTitle: "保存与记录", saveMonth: "保存本月到历史",
+    exportJson: "导出 JSON", importJson: "导入 JSON", clearMonth: "清空本月",
+    trendTitle: "📈 月度总支出趋势", monthSuffix: "月",
+    historyTotal: "总支出约 {x}", loadBtn: "载入",
+    emptyHistory: "暂无历史月份,点\"保存本月到历史\"留存一份",
+    copied: "已复制,去粘贴到群里吧 ✌️", copyFail: "复制失败,请手动选择文本",
+    shareNeedMembers: "先添加租客,再生成分享链接", shareCopied: "分享链接已复制,发给室友吧 🔗", copyFailShort: "复制失败",
+    saved: "已保存 {m} 的账单 📦", imported: "导入成功 ✅", importFail: "导入失败:文件格式不对",
+    cleared: "已清空", undo: "撤销", restored: "已恢复 ✅", sampleLoaded: "已载入示例数据,随便改 🎉",
+    memberDefault: "租客",
+    clearConfirm: "确定清空本月的全部数据吗?(历史记录不受影响)",
+    overwriteConfirm: "载入分享的账单会覆盖当前正在编辑的内容,继续吗?",
+    billFallback: "账单", meterFallback: "抄表",
+    copyBillTitle: "合租账单", copyDetails: "明细", copyOwed: "每人应付", copyPaidPrefix: "已垫付",
+    copyTransfers: "转账", copyTotal: "合计", copyBy: "由「合租账本 HeZu」计算",
+    sampleN1: "张三(主卧)", sampleN2: "李四(次卧)", sampleN3: "王五(小卧)",
+    sampleB1: "房租", sampleB2: "宽带网费", sampleB3: "清洁用品", sampleM1: "电费", sampleM2: "水费",
+    footer: "HeZu v1.3 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器",
+  },
+  en: {
+    appTitle: "HeZu Rent Split",
+    tagline: "Bill splitter for shared flats · equal / weighted / meter readings / settlement · data stays in your browser",
+    monthLabel: "Billing month",
+    membersTitle: "Roommates", addMember: "＋ Add roommate",
+    membersHint: "Weights apply to weighted splits (e.g. master room 1.5, small room 1). Equal splits ignore weights.",
+    peopleSuffix: "", membersEmptyTag: "none yet",
+    emptyMembers: "No roommates yet — click \"Add roommate\" to start 🎉",
+    loadSample: "🎁 Load sample data",
+    namePh: "Name", weight: "Weight", del: "Delete",
+    addMembersFirst: "Add roommates first", selectAll: "All", selectAllTip: "Select / clear all",
+    modeEqual: "Equal", modeWeight: "By weight", modeCustom: "Custom shares",
+    noPayer: "(nobody paid)",
+    billsTitle: "Bills (rent, internet, supplies…)", addBill: "＋ Add bill",
+    emptyBills: "No bills yet — click \"Add bill\" to add rent, internet, etc.",
+    billNamePh: "Bill name", amountLabel: "Amount", splitLabel: "Split by", payerLabel: "Paid by",
+    participantsLabel: "Participants (click to toggle)", shareOf: "{n} pays",
+    sumOk: "✓ Shares add up to {x}", sumDiff: "Shares add up to {a}, differs by {b} — please check",
+    metersTitle: "Meter readings (water, power, gas)", addMeter: "＋ Add meter",
+    metersHint: "Enter previous/current readings and unit price; the amount is computed automatically (current should be ≥ previous).",
+    meterNamePh: "e.g. Power", prevLabel: "Previous", currLabel: "Current", priceLabel: "Unit price",
+    readWarn: "Current reading is lower than previous — please check",
+    emptyMeters: "No meters yet — click \"Add meter\" to enter readings",
+    resultTitle: "Settlement", totalTag: "Total this month {x}",
+    emptyResult: "Add roommates to see what everyone owes and who should transfer whom",
+    thMember: "Roommate", thOwed: "Owes", thPaid: "Paid", thNet: "Net (+ = receives)",
+    transfersTitle: "Transfers (settle with these):",
+    settledNone: "✅ All settled, no transfers needed", noInternal: "No transfers needed within the group",
+    unpaidWarn: "⚠️ {x} of expenses has no payer recorded — it won't appear in transfers (pay it yourself or fill in the payer)",
+    abnormalWarn: "⚠️ A meter's current reading is lower than previous — please check",
+    copyText: "📋 Copy as text (for group chat)", copyShare: "🔗 Copy share link", printBtn: "🖨️ Print / Save PDF",
+    settleHint: "{e} expenses · {b} bills + {m} meters",
+    toolsTitle: "Save & records", saveMonth: "Save this month",
+    exportJson: "Export JSON", importJson: "Import JSON", clearMonth: "Clear month",
+    trendTitle: "📈 Monthly spending trend", monthSuffix: "",
+    historyTotal: "Total ≈ {x}", loadBtn: "Load",
+    emptyHistory: "No saved months yet — click \"Save this month\" to keep one",
+    copied: "Copied! Paste it into the group ✌️", copyFail: "Copy failed, please select the text manually",
+    shareNeedMembers: "Add roommates before sharing", shareCopied: "Share link copied — send it to your roommates 🔗", copyFailShort: "Copy failed",
+    saved: "Saved {m} 📦", imported: "Imported ✅", importFail: "Import failed: bad file format",
+    cleared: "Cleared", undo: "Undo", restored: "Restored ✅", sampleLoaded: "Sample loaded — edit freely 🎉",
+    memberDefault: "Roommate",
+    clearConfirm: "Clear all data for this month? (Saved history is not affected)",
+    overwriteConfirm: "Loading the shared bill will overwrite your current edits. Continue?",
+    billFallback: "Bill", meterFallback: "Meter",
+    copyBillTitle: "Shared-flat bill", copyDetails: "Details", copyOwed: "Each owes", copyPaidPrefix: "paid",
+    copyTransfers: "Transfers", copyTotal: "Total", copyBy: "computed by HeZu",
+    sampleN1: "Zhang (Master)", sampleN2: "Li (Middle)", sampleN3: "Wang (Small)",
+    sampleB1: "Rent", sampleB2: "Broadband", sampleB3: "Supplies", sampleM1: "Power", sampleM2: "Water",
+    footer: "HeZu v1.3 · MIT · A single-file app. All data stays in your browser",
+  },
+};
+let lang = "zh";
+try{
+  const saved = localStorage.getItem("hezu:lang");
+  lang = saved === "en" || saved === "zh" ? saved
+    : ((navigator.language || "zh-CN").toLowerCase().startsWith("zh") ? "zh" : "en");
+}catch(e){}
+function t(key){ return (I18N[lang] && I18N[lang][key]) || I18N.zh[key] || key; }
+function setLang(l){
+  lang = l;
+  try{ localStorage.setItem("hezu:lang", l); }catch(e){}
+  renderAll();
+}
+
 /* ---------- 状态 ---------- */
 const LS_CUR = "hezu:v1:current", LS_HIS = "hezu:v1:history";
 let state = null;
@@ -190,7 +309,7 @@ function save(){
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function toast(msg, actionLabel, onAction){
   const t = document.getElementById("toast");
-  t.innerHTML = esc(msg) + (actionLabel ? ` <a href="javascript:void(0)" id="toast-act">撤销</a>` : "");
+  t.innerHTML = esc(msg) + (actionLabel ? ` <a href="javascript:void(0)" id="toast-act">${esc(actionLabel)}</a>` : "");
   if(actionLabel){
     const a = t.querySelector("#toast-act");
     a.style.cssText = "color:#9db1ff;text-decoration:underline;margin-left:6px;cursor:pointer";
@@ -245,7 +364,7 @@ function expenseOfBill(b){
   }else{
     shares = splitEqual(b.amount, parts);
   }
-  return { name: b.name || "账单", amount: b.amount, shares, payer: b.payer || "", parts };
+  return { name: b.name || t("billFallback"), amount: b.amount, shares, payer: b.payer || "", parts };
 }
 function expenseOfMeter(mt){
   const amount = Math.max(0, Math.round(((mt.curr || 0) - (mt.prev || 0)) * (mt.price || 0) * 100));
@@ -256,7 +375,7 @@ function expenseOfMeter(mt){
   }else{
     shares = splitEqual(amount, parts);
   }
-  return { name: mt.name || "抄表", amount, shares, payer: mt.payer || "", parts,
+  return { name: mt.name || t("meterFallback"), amount, shares, payer: mt.payer || "", parts,
            abnormal: mt.prev != null && mt.curr != null && mt.curr < mt.prev };
 }
 function computeAll(){
@@ -301,11 +420,30 @@ function computeAll(){
 }
 
 /* ---------- 渲染 ---------- */
-function renderAll(){ renderMembers(); renderBills(); renderMeters(); renderResult(); renderHistory(); renderTrend(); renderDatalist(); }
+function renderAll(){ renderStatic(); renderMembers(); renderBills(); renderMeters(); renderResult(); renderHistory(); renderTrend(); renderDatalist(); }
+
+/* 静态文案(标题、按钮、提示)按当前语言刷新 */
+function renderStatic(){
+  document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+  const set = (id, key) => { const el = document.getElementById(id); if(el) el.textContent = t(key); };
+  set("t-app-title", "appTitle");
+  set("t-sub", "tagline");
+  set("t-month-label", "monthLabel");
+  set("t-h-members", "membersTitle"); set("btn-add-member", "addMember"); set("t-hint-members", "membersHint");
+  set("t-h-bills", "billsTitle"); set("btn-add-bill", "addBill");
+  set("t-h-meters", "metersTitle"); set("btn-add-meter", "addMeter"); set("t-hint-meters", "metersHint");
+  set("t-h-result", "resultTitle");
+  set("btn-copy", "copyText"); set("btn-share", "copyShare"); set("btn-print", "printBtn");
+  set("t-h-tools", "toolsTitle");
+  set("btn-save", "saveMonth"); set("btn-export", "exportJson"); set("btn-import", "importJson"); set("btn-clear", "clearMonth");
+  set("t-footer", "footer");
+  const bl = document.getElementById("btn-lang");
+  if(bl) bl.textContent = lang === "zh" ? "EN" : "中文";
+}
 
 function memberChips(selected, onToggleAttr){
-  if(!state.members.length) return `<span class="hint">先添加租客</span>`;
-  return `<div class="chips"><span class="chip" data-act-toggle-all title="一键全选/清空">全选</span>` + state.members.map(m =>
+  if(!state.members.length) return `<span class="hint">${t("addMembersFirst")}</span>`;
+  return `<div class="chips"><span class="chip" data-act-toggle-all title="${t("selectAllTip")}">${t("selectAll")}</span>` + state.members.map(m =>
     `<span class="chip ${selected.includes(m.id) ? "on" : ""}" ${onToggleAttr}="${m.id}">${esc(m.name)}</span>`
   ).join("") + `</div>`;
 }
@@ -314,30 +452,31 @@ function customSumTag(b){
   if(!b.amount && !sum) return "";
   const diff = (b.amount || 0) - sum;
   return diff === 0
-    ? `<span class="tag" style="margin-top:8px;display:inline-block">✓ 份额合计 ${fmt(sum)}</span>`
-    : `<span class="tag warn" style="margin-top:8px;display:inline-block">份额合计 ${fmt(sum)},与金额相差 ${fmt(Math.abs(diff))},请核对</span>`;
+    ? `<span class="tag" style="margin-top:8px;display:inline-block">${t("sumOk").replace("{x}", fmt(sum))}</span>`
+    : `<span class="tag warn" style="margin-top:8px;display:inline-block">${t("sumDiff").replace("{a}", fmt(sum)).replace("{b}", fmt(Math.abs(diff)))}</span>`;
 }
 function payerOptions(sel){
-  return `<option value="">(无人垫付)</option>` + state.members.map(m =>
+  return `<option value="">${t("noPayer")}</option>` + state.members.map(m =>
     `<option value="${m.id}" ${m.id === sel ? "selected" : ""}>${esc(m.name)}</option>`).join("");
 }
 function modeOptions(sel, withCustom){
-  const opts = [["equal","均摊"],["weight","按权重"]];
-  if(withCustom) opts.push(["custom","自定义份额"]);
-  return opts.map(([v,t]) => `<option value="${v}" ${sel===v?"selected":""}>${t}</option>`).join("");
+  const opts = [["equal", t("modeEqual")], ["weight", t("modeWeight")]];
+  if(withCustom) opts.push(["custom", t("modeCustom")]);
+  return opts.map(([v, label]) => `<option value="${v}" ${sel===v?"selected":""}>${label}</option>`).join("");
 }
 
 function renderMembers(){
   const box = document.getElementById("members");
-  document.getElementById("member-count").textContent = state.members.length ? state.members.length + " 人" : "还没添加";
+  document.getElementById("member-count").textContent =
+    state.members.length ? state.members.length + t("peopleSuffix") : t("membersEmptyTag");
   box.innerHTML = state.members.map(m => `
     <div class="member-row" data-id="${m.id}">
-      <input type="text" class="nm" data-act="member-name" value="${esc(m.name)}" placeholder="姓名">
-      <input type="number" class="w" inputmode="decimal" data-act="member-weight" value="${m.weight}" min="0" step="0.1" title="权重">
-      <button class="danger mini" data-act="member-del">删除</button>
+      <input type="text" class="nm" data-act="member-name" value="${esc(m.name)}" placeholder="${t("namePh")}">
+      <input type="number" class="w" inputmode="decimal" data-act="member-weight" value="${m.weight}" min="0" step="0.1" title="${t("weight")}">
+      <button class="danger mini" data-act="member-del">${t("del")}</button>
     </div>`).join("") ||
-    `<div class="empty">还没有租客,点右上角"添加租客"开始 🎉<br>
-      <button class="ghost mini" style="margin-top:10px" data-act="sample">🎁 一键载入示例数据</button></div>`;
+    `<div class="empty">${t("emptyMembers")}<br>
+      <button class="ghost mini" style="margin-top:10px" data-act="sample">${t("loadSample")}</button></div>`;
 }
 
 function renderBills(){
@@ -345,25 +484,25 @@ function renderBills(){
   box.innerHTML = state.bills.map(b => `
     <div class="item" data-id="${b.id}">
       <div class="item-head">
-        <input type="text" list="name-list" data-act="bill-name" value="${esc(b.name)}" placeholder="账单名称" style="font-weight:600;flex:1">
+        <input type="text" list="name-list" data-act="bill-name" value="${esc(b.name)}" placeholder="${t("billNamePh")}" style="font-weight:600;flex:1">
         <span class="amt">${fmt(b.amount||0)}</span>
-        <button class="danger mini" data-act="bill-del">删除</button>
+        <button class="danger mini" data-act="bill-del">${t("del")}</button>
       </div>
       <div class="grid cols-3" style="margin-top:10px">
-        <div class="field"><label>金额(元)</label><input type="number" inputmode="decimal" data-act="bill-amount" value="${b.amount ? (b.amount/100) : ""}" min="0" step="0.01" placeholder="0.00"></div>
-        <div class="field"><label>分摊方式</label><select data-act="bill-mode">${modeOptions(b.mode, true)}</select></div>
-        <div class="field"><label>垫付人</label><select data-act="bill-payer">${payerOptions(b.payer)}</select></div>
+        <div class="field"><label>${t("amountLabel")}</label><input type="number" inputmode="decimal" data-act="bill-amount" value="${b.amount ? (b.amount/100) : ""}" min="0" step="0.01" placeholder="0.00"></div>
+        <div class="field"><label>${t("splitLabel")}</label><select data-act="bill-mode">${modeOptions(b.mode, true)}</select></div>
+        <div class="field"><label>${t("payerLabel")}</label><select data-act="bill-payer">${payerOptions(b.payer)}</select></div>
       </div>
-      <div class="field"><label>参与人(点击切换)</label>${memberChips(b.participants, "data-act-toggle")}</div>
+      <div class="field"><label>${t("participantsLabel")}</label>${memberChips(b.participants, "data-act-toggle")}</div>
       ${b.mode === "custom" ? `
         <div class="grid cols-3" style="margin-top:8px">
           ${b.participants.map(id => `
-            <div class="field"><label>${esc(memberName(id))} 承担(元)</label>
+            <div class="field"><label>${t("shareOf").replace("{n}", esc(memberName(id)))}</label>
               <input type="number" inputmode="decimal" data-act="bill-share" data-mid="${id}" value="${b.shares && b.shares[id] ? (b.shares[id]/100) : ""}" min="0" step="0.01"></div>`).join("")}
         </div>
         <div style="margin-top:4px" data-sum>${customSumTag(b)}</div>` : ""}
     </div>`).join("") ||
-    `<div class="empty">暂无账单项,点"添加账单"录入房租、网络费等</div>`;
+    `<div class="empty">${t("emptyBills")}</div>`;
 }
 
 function renderMeters(){
@@ -374,37 +513,37 @@ function renderMeters(){
     return `
     <div class="item" data-id="${mt.id}">
       <div class="item-head">
-        <input type="text" list="name-list" data-act="meter-name" value="${esc(mt.name)}" placeholder="如:电费" style="font-weight:600;flex:1">
+        <input type="text" list="name-list" data-act="meter-name" value="${esc(mt.name)}" placeholder="${t("meterNamePh")}" style="font-weight:600;flex:1">
         <span class="amt">${fmt(amount)}</span>
-        <span class="tag warn" data-warn ${abnormal ? "" : "hidden"}>本期读数小于上期,请检查</span>
-        <button class="danger mini" data-act="meter-del">删除</button>
+        <span class="tag warn" data-warn ${abnormal ? "" : "hidden"}>${t("readWarn")}</span>
+        <button class="danger mini" data-act="meter-del">${t("del")}</button>
       </div>
       <div class="grid cols-3" style="margin-top:10px">
-        <div class="field"><label>上期读数</label><input type="number" inputmode="decimal" data-act="meter-prev" value="${mt.prev ?? ""}" step="0.01"></div>
-        <div class="field"><label>本期读数</label><input type="number" inputmode="decimal" data-act="meter-curr" value="${mt.curr ?? ""}" step="0.01"></div>
-        <div class="field"><label>单价(元/度·吨·方)</label><input type="number" inputmode="decimal" data-act="meter-price" value="${mt.price ?? ""}" min="0" step="0.0001"></div>
+        <div class="field"><label>${t("prevLabel")}</label><input type="number" inputmode="decimal" data-act="meter-prev" value="${mt.prev ?? ""}" step="0.01"></div>
+        <div class="field"><label>${t("currLabel")}</label><input type="number" inputmode="decimal" data-act="meter-curr" value="${mt.curr ?? ""}" step="0.01"></div>
+        <div class="field"><label>${t("priceLabel")}</label><input type="number" inputmode="decimal" data-act="meter-price" value="${mt.price ?? ""}" min="0" step="0.0001"></div>
       </div>
       <div class="grid cols-2">
-        <div class="field"><label>分摊方式</label><select data-act="meter-mode">${modeOptions(mt.mode, false)}</select></div>
-        <div class="field"><label>垫付人</label><select data-act="meter-payer">${payerOptions(mt.payer)}</select></div>
+        <div class="field"><label>${t("splitLabel")}</label><select data-act="meter-mode">${modeOptions(mt.mode, false)}</select></div>
+        <div class="field"><label>${t("payerLabel")}</label><select data-act="meter-payer">${payerOptions(mt.payer)}</select></div>
       </div>
-      <div class="field"><label>参与人(点击切换)</label>${memberChips(mt.participants, "data-act-toggle")}</div>
+      <div class="field"><label>${t("participantsLabel")}</label>${memberChips(mt.participants, "data-act-toggle")}</div>
     </div>`;
   }).join("") ||
-  `<div class="empty">暂无抄表项,点"添加抄表"录入水/电/燃气读数</div>`;
+  `<div class="empty">${t("emptyMeters")}</div>`;
 }
 
 function renderResult(){
   const box = document.getElementById("result");
   const r = computeAll();
-  document.getElementById("total-tag").textContent = state.members.length ? ("本月总支出 " + fmt(r.total)) : "";
+  document.getElementById("total-tag").textContent = state.members.length ? t("totalTag").replace("{x}", fmt(r.total)) : "";
   if(!state.members.length){
-    box.innerHTML = `<div class="empty">添加租客后,这里会显示每人应付和互相转账方案</div>`;
+    box.innerHTML = `<div class="empty">${t("emptyResult")}</div>`;
     document.getElementById("settle-hint").textContent = "";
     return;
   }
   let html = `<table><thead><tr>
-      <th>租客</th><th class="num">应付</th><th class="num">已垫付</th><th class="num">净额(正=应收)</th>
+      <th>${t("thMember")}</th><th class="num">${t("thOwed")}</th><th class="num">${t("thPaid")}</th><th class="num">${t("thNet")}</th>
     </tr></thead><tbody>`;
   r.per.forEach(p => {
     const cls = p.balance > 0 ? "pos" : (p.balance < 0 ? "neg" : "");
@@ -414,36 +553,36 @@ function renderResult(){
   });
   html += `</tbody></table>`;
   if(r.transfers.length){
-    html += `<div style="margin-top:14px;font-size:13px;color:var(--muted)">转账方案(按此转账即可两清):</div>`;
-    html += r.transfers.map(t => `
-      <div class="transfer">🧑 ${esc(t.from.name)} <span class="arrow">→</span> ${esc(t.to.name)}
-        <span class="v">${fmt(t.amount)}</span></div>`).join("");
+    html += `<div style="margin-top:14px;font-size:13px;color:var(--muted)">${t("transfersTitle")}</div>`;
+    html += r.transfers.map(tr => `
+      <div class="transfer">🧑 ${esc(tr.from.name)} <span class="arrow">→</span> ${esc(tr.to.name)}
+        <span class="v">${fmt(tr.amount)}</span></div>`).join("");
   }else{
     html += r.unpaid > 0
-      ? `<div class="empty" style="padding:10px 0">组内无需互相转账</div>`
-      : `<div class="empty" style="padding:10px 0">✅ 账目已两清,无需转账</div>`;
+      ? `<div class="empty" style="padding:10px 0">${t("noInternal")}</div>`
+      : `<div class="empty" style="padding:10px 0">${t("settledNone")}</div>`;
   }
-  if(r.unpaid > 0) html += `<div class="hint" style="color:var(--warn)">⚠️ 有 ${fmt(r.unpaid)} 的支出没有填垫付人,这部分金额不会出现在转账方案里(请自行缴纳或补填垫付人)</div>`;
-  if(r.hasAbnormal) html += `<div class="hint" style="color:var(--warn)">⚠️ 有抄表项本期读数小于上期,请检查后重新计算</div>`;
+  if(r.unpaid > 0) html += `<div class="hint" style="color:var(--warn)">${t("unpaidWarn").replace("{x}", fmt(r.unpaid))}</div>`;
+  if(r.hasAbnormal) html += `<div class="hint" style="color:var(--warn)">${t("abnormalWarn")}</div>`;
   box.innerHTML = html;
   document.getElementById("settle-hint").textContent =
-    `共 ${r.expenses.length} 笔支出 · ${state.bills.length} 笔账单 + ${state.meters.length} 项抄表`;
+    t("settleHint").replace("{e}", r.expenses.length).replace("{b}", state.bills.length).replace("{m}", state.meters.length);
 }
 
 function buildText(){
   const r = computeAll();
-  let s = `🏠 ${state.month} 合租账单\n`;
+  let s = `🏠 ${state.month} ${t("copyBillTitle")}\n`;
   if(r.expenses.length){
-    s += `\n—— 明细 ——\n`;
+    s += `\n—— ${t("copyDetails")} ——\n`;
     r.expenses.forEach(e => s += `· ${e.name}:${fmt(e.amount)}\n`);
   }
-  s += `\n—— 每人应付 ——\n`;
-  r.per.forEach(p => s += `· ${p.m.name}:${fmt(p.owed)}${p.paid ? `(已垫付 ${fmt(p.paid)})` : ""}\n`);
+  s += `\n—— ${t("copyOwed")} ——\n`;
+  r.per.forEach(p => s += `· ${p.m.name}:${fmt(p.owed)}${p.paid ? `(${t("copyPaidPrefix")} ${fmt(p.paid)})` : ""}\n`);
   if(r.transfers.length){
-    s += `\n—— 转账 ——\n`;
-    r.transfers.forEach(t => s += `· ${t.from.name} → ${t.to.name}:${fmt(t.amount)}\n`);
+    s += `\n—— ${t("copyTransfers")} ——\n`;
+    r.transfers.forEach(tr => s += `· ${tr.from.name} → ${tr.to.name}:${fmt(tr.amount)}\n`);
   }
-  s += `\n合计:${fmt(r.total)} · 由「合租账本 HeZu」计算`;
+  s += `\n${t("copyTotal")}:${fmt(r.total)} · ${t("copyBy")}`;
   return s;
 }
 
@@ -457,11 +596,11 @@ function renderHistory(){
         (h.bills||[]).forEach(b => total += b.amount||0);
         (h.meters||[]).forEach(mt => { if(mt.curr >= mt.prev) total += Math.round((mt.curr - mt.prev) * (mt.price||0) * 100); });
         return `<div class="history-item"><b>${esc(mo)}</b>
-          <span class="hint">总支出约 ${fmt(total)}</span><span class="grow"></span>
-          <button class="mini ghost" data-act="his-load" data-mo="${esc(mo)}">载入</button>
-          <button class="mini danger" data-act="his-del" data-mo="${esc(mo)}">删除</button></div>`;
+          <span class="hint">${t("historyTotal").replace("{x}", fmt(total))}</span><span class="grow"></span>
+          <button class="mini ghost" data-act="his-load" data-mo="${esc(mo)}">${t("loadBtn")}</button>
+          <button class="mini danger" data-act="his-del" data-mo="${esc(mo)}">${t("del")}</button></div>`;
       }).join("")
-    : `<div class="empty">暂无历史月份,点"保存本月到历史"留存一份</div>`;
+    : `<div class="empty">${t("emptyHistory")}</div>`;
 }
 
 /* ---------- 示例数据 ---------- */
@@ -470,21 +609,21 @@ function loadSample(){
   state = {
     month: state ? state.month : nowMonth(),
     members: [
-      { id: a, name: "张三(主卧)", weight: 1.5 },
-      { id: b, name: "李四(次卧)", weight: 1 },
-      { id: c, name: "王五(小卧)", weight: 1 },
+      { id: a, name: t("sampleN1"), weight: 1.5 },
+      { id: b, name: t("sampleN2"), weight: 1 },
+      { id: c, name: t("sampleN3"), weight: 1 },
     ],
     bills: [
-      { id: uid(), name: "房租", amount: 360000, mode: "weight", shares: {}, payer: a, participants: [a,b,c] },
-      { id: uid(), name: "宽带网费", amount: 9900, mode: "equal", shares: {}, payer: c, participants: [a,b,c] },
-      { id: uid(), name: "清洁用品", amount: 4500, mode: "equal", shares: {}, payer: b, participants: [a,c] },
+      { id: uid(), name: t("sampleB1"), amount: 360000, mode: "weight", shares: {}, payer: a, participants: [a,b,c] },
+      { id: uid(), name: t("sampleB2"), amount: 9900, mode: "equal", shares: {}, payer: c, participants: [a,b,c] },
+      { id: uid(), name: t("sampleB3"), amount: 4500, mode: "equal", shares: {}, payer: b, participants: [a,c] },
     ],
     meters: [
-      { id: uid(), name: "电费", prev: 1200, curr: 1568, price: 0.55, mode: "equal", payer: a, participants: [a,b,c] },
-      { id: uid(), name: "水费", prev: 308, curr: 321, price: 3.6, mode: "weight", payer: b, participants: [a,b,c] },
+      { id: uid(), name: t("sampleM1"), prev: 1200, curr: 1568, price: 0.55, mode: "equal", payer: a, participants: [a,b,c] },
+      { id: uid(), name: t("sampleM2"), prev: 308, curr: 321, price: 3.6, mode: "weight", payer: b, participants: [a,b,c] },
     ],
   };
-  save(); renderAll(); toast("已载入示例数据,随便改 🎉");
+  save(); renderAll(); toast(t("sampleLoaded"));
 }
 
 /* ---------- 分享链接(把账单编码进 URL,无后端也能分享) ---------- */
@@ -543,9 +682,9 @@ function renderTrend(){
     return `<g><title>${esc(d.mo)}:${fmt(d.total)}</title>
       <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="#5b6cff" opacity="${i === data.length - 1 ? 1 : 0.45}"></rect>
       <text x="${x + w / 2}" y="${y - 6}" text-anchor="middle" font-size="11" fill="var(--muted)">${(d.total / 100).toFixed(0)}</text>
-      <text x="${x + w / 2}" y="${H - 16}" text-anchor="middle" font-size="11" fill="var(--muted)">${esc(d.mo.slice(5))}月</text></g>`;
+      <text x="${x + w / 2}" y="${H - 16}" text-anchor="middle" font-size="11" fill="var(--muted)">${esc(d.mo.slice(5))}${t("monthSuffix")}</text></g>`;
   }).join("");
-  box.innerHTML = `<div style="font-size:13px;color:var(--muted);margin:10px 0 2px">📈 月度总支出趋势</div>
+  box.innerHTML = `<div style="font-size:13px;color:var(--muted);margin:10px 0 2px">${t("trendTitle")}</div>
     <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${bars}</svg>`;
 }
 
@@ -600,7 +739,7 @@ delegate(membersBox, btn => {
 });
 
 document.getElementById("btn-add-member").onclick = () => {
-  state.members.push({ id: uid(), name: "租客" + (state.members.length + 1), weight: 1 });
+  state.members.push({ id: uid(), name: t("memberDefault") + (state.members.length + 1), weight: 1 });
   save(); renderAll();
 };
 
@@ -705,28 +844,29 @@ wireToggleChips(metersBox);
 const monthInput = document.getElementById("month");
 monthInput.value = state.month;
 monthInput.addEventListener("change", () => { state.month = monthInput.value || nowMonth(); save(); });
+document.getElementById("btn-lang").onclick = () => setLang(lang === "zh" ? "en" : "zh");
 
 /* 复制文本 */
 document.getElementById("btn-copy").onclick = async () => {
   const text = buildText();
-  try{ await navigator.clipboard.writeText(text); toast("已复制,去粘贴到群里吧 ✌️"); }
+  try{ await navigator.clipboard.writeText(text); toast(t("copied")); }
   catch(e){
     const ta = document.createElement("textarea");
     ta.value = text; document.body.appendChild(ta); ta.select();
-    try{ document.execCommand("copy"); toast("已复制,去粘贴到群里吧 ✌️"); }
-    catch(err){ toast("复制失败,请手动选择文本"); }
+    try{ document.execCommand("copy"); toast(t("copied")); }
+    catch(err){ toast(t("copyFail")); }
     ta.remove();
   }
 };
 document.getElementById("btn-share").onclick = async () => {
-  if(!state.members.length){ toast("先添加租客,再生成分享链接"); return; }
+  if(!state.members.length){ toast(t("shareNeedMembers")); return; }
   const url = location.href.split("#")[0] + "#d=" + encodeState();
-  try{ await navigator.clipboard.writeText(url); toast("分享链接已复制,发给室友吧 🔗"); }
+  try{ await navigator.clipboard.writeText(url); toast(t("shareCopied")); }
   catch(e){
     const ta = document.createElement("textarea");
     ta.value = url; document.body.appendChild(ta); ta.select();
-    try{ document.execCommand("copy"); toast("分享链接已复制,发给室友吧 🔗"); }
-    catch(err){ toast("复制失败"); }
+    try{ document.execCommand("copy"); toast(t("shareCopied")); }
+    catch(err){ toast(t("copyFailShort")); }
     ta.remove();
   }
 };
@@ -735,7 +875,7 @@ document.getElementById("btn-print").onclick = () => window.print();
 /* 历史与导入导出 */
 document.getElementById("btn-save").onclick = () => {
   history[state.month] = JSON.parse(JSON.stringify(state));
-  save(); renderAll(); toast(`已保存 ${state.month} 的账单 📦`);
+  save(); renderAll(); toast(t("saved").replace("{m}", state.month));
 };
 document.getElementById("history").addEventListener("click", e => {
   const btn = e.target.closest("[data-act]"); if(!btn) return;
@@ -765,19 +905,19 @@ document.getElementById("file-import").addEventListener("change", e => {
       if(!data || !Array.isArray(data.members)) throw new Error("bad");
       state = { month: data.month || nowMonth(), members: data.members,
         bills: data.bills || [], meters: data.meters || [] };
-      save(); monthInput.value = state.month; renderAll(); toast("导入成功 ✅");
-    }catch(err){ toast("导入失败:文件格式不对"); }
+      save(); monthInput.value = state.month; renderAll(); toast(t("imported"));
+    }catch(err){ toast(t("importFail")); }
   };
   fr.readAsText(f);
   e.target.value = "";
 });
 document.getElementById("btn-clear").onclick = () => {
-  if(!confirm("确定清空本月的全部数据吗?(历史记录不受影响)")) return;
+  if(!confirm(t("clearConfirm"))) return;
   const snapshot = state;
   state = blankState(); state.month = monthInput.value || nowMonth();
   save(); monthInput.value = state.month; renderAll();
-  toast("已清空", "撤销", () => {
-    state = snapshot; save(); monthInput.value = state.month; renderAll(); toast("已恢复 ✅");
+  toast(t("cleared"), t("undo"), () => {
+    state = snapshot; save(); monthInput.value = state.month; renderAll(); toast(t("restored"));
   });
 };
 
@@ -787,7 +927,7 @@ load();
   const m = location.hash.match(/[#&]d=([^&]+)/);
   if(!m) return;
   try{
-    if(state.members.length && !confirm("载入分享的账单会覆盖当前正在编辑的内容,继续吗?")) return;
+    if(state.members.length && !confirm(t("overwriteConfirm"))) return;
     state = decodeState(m[1]); save();
   }catch(e){}
 })();
