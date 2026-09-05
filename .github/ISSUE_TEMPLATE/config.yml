@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 使用说明
+    url: https://github.com/qlw088697-ui/hezu#readme
+    about: 先阅读 README,大部分问题(数据存储位置、分摊规则、备份恢复)都有说明

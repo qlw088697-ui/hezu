@@ -23,7 +23,7 @@ function makeApi(initState){
       setState: (s) => { state = s; },
       fmt, splitEqual, splitWeight, expenseOfBill, expenseOfMeter, computeAll,
       roomRentOf, sanitizeState, settlementCsv, copyBillsFromMonth, parseBackup, computeAllFor,
-      parseCsv, billsFromCsv, aggregateMonths,
+      parseCsv, billsFromCsv, aggregateMonths, aggregateMonths,
     };`);
 }
 const sampleState = {
@@ -232,6 +232,10 @@ assert(aggA.owed === 205000 && aggB.owed === 205000, "每人累计应付 ¥2050.
 assert(aggA.balance === -5000 && aggB.balance === 5000, "累计净额守恒(A -¥50 / B +¥50)");
 assert(api.aggregateMonths(null).months === 0, "空历史返回零月");
 
+/* 周期说明标签:消毒截断 + 分享链接往返保留 */
+const withLabel = api.sanitizeState({ month: "2026-09", periodLabel: "租期 9/15–10/14，超出四十个字符的很长很长很长很长很长很长很长很长的说明文本", members: [{ id: "a", name: "A" }] }, "2026-09");
+assert(withLabel.periodLabel.length <= 40 && withLabel.periodLabel.startsWith("租期 9/15–10/14"), "周期说明截断至 40 字符");
+
 /* 3) 分享链接编解码往返 */
 const shareSeg = script.split("/* ---------- 示例数据 ---------- */")[1].split("/* ---------- 事件 ---------- */")[0];
 const api2 = new Function(core + shareSeg + `
@@ -260,6 +264,10 @@ assert(decoded.meters[0].payer === "" && decoded.bills[0].payer === decoded.memb
 assert(decoded.bills[1].participants.length === 2, "参与人映射正确");
 const url = "https://qlw088697-ui.github.io/hezu/#d=" + code;
 assert(url.length < 8000, "分享链接长度可控(" + url.length + " 字符 < 8000)");
+
+/* 周期说明在分享链接中保留 */
+api2.setState({ month: "2026-09", periodLabel: "9/15–10/14", members: [{ id: "a", name: "A", weight: 1 }], bills: [], meters: [], rooms: [] });
+assert(api2.decodeState(api2.encodeState()).periodLabel === "9/15–10/14", "周期说明在分享链接中保留");
 
 console.log(failed === 0 ? "\n全部通过 ✅" : `\n${failed} 项失败 ❌`);
 process.exit(failed === 0 ? 0 : 1);

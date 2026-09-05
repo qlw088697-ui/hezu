@@ -125,6 +125,7 @@
     <div class="month-row">
       <label for="month" id="t-month-label">账单月份</label>
       <input type="month" id="month">
+      <input type="text" id="period-label" maxlength="40" style="max-width:170px;background:rgba(255,255,255,.16);border-color:transparent;color:#fff" placeholder="周期说明(选填)">
       <button class="mini" id="btn-theme" aria-label="主题" style="background:rgba(255,255,255,.16);border-color:transparent;color:#fff" title="主题">🌓</button>
       <button class="mini" id="btn-lang" aria-label="切换语言 / Switch language" style="background:rgba(255,255,255,.16);border-color:transparent;color:#fff" title="切换语言 / Switch language">EN</button>
     </div>
@@ -219,13 +220,13 @@
 <script>
 "use strict";
 /* 版本号单一来源:页脚与导出文件名统一引用 */
-const APP_VERSION = "2.3";
+const APP_VERSION = "2.4";
 /* ---------- 多语言 ---------- */
 const I18N = {
   zh: {
     appTitle: "合租账本",
     tagline: "合租费用分摊计算器 · 均摊 / 按权重 / 抄表计费 / 垫付结算 · 数据只存在你的浏览器里",
-    monthLabel: "账单月份",
+    monthLabel: "账单月份", periodPh: "周期说明(选填,如:9/15–10/14)",
     membersTitle: "租客", addMember: "＋ 添加租客",
     membersHint: "权重用于\"按权重\"分摊:比如主卧 1.5、次卧 1。均摊模式不受权重影响。",
     peopleSuffix: " 人", membersEmptyTag: "还没添加",
@@ -306,7 +307,7 @@ const I18N = {
   en: {
     appTitle: "HeZu Rent Split",
     tagline: "Bill splitter for shared flats · equal / weighted / meter readings / settlement · data stays in your browser",
-    monthLabel: "Billing month",
+    monthLabel: "Billing month", periodPh: "Cycle note (optional)",
     membersTitle: "Roommates", addMember: "＋ Add roommate",
     membersHint: "Weights apply to weighted splits (e.g. master room 1.5, small room 1). Equal splits ignore weights.",
     peopleSuffix: "", membersEmptyTag: "none yet",
@@ -431,16 +432,17 @@ function uid(){
   return c ? crypto.randomUUID() : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
 }
 function nowMonth(){ const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); }
-function blankState(){ return { month: nowMonth(), members: [], bills: [], meters: [], rooms: [] }; }
+function blankState(){ return { month: nowMonth(), periodLabel: "", members: [], bills: [], meters: [], rooms: [] }; }
 
 /* 数据消毒:任何来源(导入/分享链接/历史/本地存储)的数据先规范化,防畸形数据与注入 */
 function sanitizeState(raw, fallbackMonth){
   raw = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const clip = (v, n) => String(v == null ? "" : v).slice(0, n);
   const s = {
     month: /^\d{4}-\d{2}$/.test(raw.month || "") ? raw.month : (fallbackMonth || nowMonth()),
+    periodLabel: clip(raw.periodLabel, 40),
     members: [], bills: [], meters: [], rooms: [],
   };
-  const clip = (v, n) => String(v == null ? "" : v).slice(0, n);
   (Array.isArray(raw.members) ? raw.members : []).slice(0, 100).forEach((m, i) => {
     m = m && typeof m === "object" ? m : {};
     const id = (typeof m.id === "string" && m.id) ? m.id.slice(0, 64) : uid();
@@ -775,7 +777,11 @@ function renderAggregate(){
     </tbody></table></details>`;
 }
 
-function renderAll(){ renderStatic(); renderMembers(); renderRooms(); renderBills(); renderMeters(); renderResult(); renderHistory(); renderTrend(); renderAggregate(); renderDatalist(); }
+function renderAll(){
+  renderStatic(); renderMembers(); renderRooms(); renderBills(); renderMeters(); renderResult(); renderHistory(); renderTrend(); renderAggregate(); renderDatalist();
+  const pi = document.getElementById("period-label");
+  if(pi && document.activeElement !== pi) pi.value = state.periodLabel || "";
+}
 
 /* 静态文案(标题、按钮、提示)按当前语言刷新 */
 function renderStatic(){
@@ -799,6 +805,8 @@ function renderStatic(){
   const footEl = document.getElementById("t-footer");
   if(footEl) footEl.textContent = t("footer").replace("{v}", APP_VERSION);
   set("t-close", "closeBtn");
+  const pi = document.getElementById("period-label");
+  if(pi) pi.placeholder = t("periodPh");
   const bi = document.getElementById("batch-input");
   if(bi) bi.placeholder = t("batchPh");
   set("t-batch-tip", "batchTip");
@@ -967,7 +975,7 @@ function renderResult(){
 
 function buildText(){
   const r = computeAll();
-  let s = `🏠 ${state.month} ${t("copyBillTitle")}\n`;
+  let s = `🏠 ${state.month}${state.periodLabel ? `(${state.periodLabel})` : ""} ${t("copyBillTitle")}\n`;
   if(r.expenses.length){
     s += `\n—— ${t("copyDetails")} ——\n`;
     r.expenses.forEach(e => s += `· ${e.name}:${fmt(e.amount)}\n`);
@@ -1008,7 +1016,7 @@ let lastFocused = null;
 function openDetail(mo){
   const hs = history[mo];
   lastFocused = document.activeElement;
-  document.getElementById("modal-title").textContent = t("detailTitle").replace("{m}", mo);
+  document.getElementById("modal-title").textContent = t("detailTitle").replace("{m}", mo) + (hs && hs.periodLabel ? " · " + hs.periodLabel : "");
   document.getElementById("modal-body").innerHTML = hs ? monthDetailHTML(hs) : `<div class="empty">${t("detailEmpty")}</div>`;
   document.getElementById("modal-mask").hidden = false;
   document.getElementById("modal-close").focus();
@@ -1032,7 +1040,7 @@ function renderHistory(){
         let total = 0;
         (h.bills||[]).forEach(b => total += b.amount||0);
         (h.meters||[]).forEach(mt => { if(mt.curr >= mt.prev) total += Math.round((mt.curr - mt.prev) * (mt.price||0) * 100); });
-        return `<div class="history-item"><b>${esc(mo)}</b>
+        return `<div class="history-item"><b>${esc(mo)}</b>${h.periodLabel ? ` <span class="tag">${esc(h.periodLabel)}</span>` : ""}
           <span class="hint">${t("historyTotal").replace("{x}", fmt(total))}</span><span class="grow"></span>
           <button class="mini" data-act="his-view" data-mo="${esc(mo)}">${t("viewBtn")}</button>
           <button class="mini" data-act="his-copy" data-mo="${esc(mo)}" title="${t("copyBtn")}">${t("copyBtn")}</button>
@@ -1070,6 +1078,7 @@ function encodeState(){
   const idx = id => state.members.findIndex(m => m.id === id);
   const o = {
     month: state.month,
+    p: state.periodLabel || "",
     m: state.members.map(x => [x.name, x.weight]),
     r: (state.rooms || []).map(x => [x.name || "", x.rent || 0, idx(x.occupantId)]),
     b: state.bills.map(x => [x.name || "", x.amount || 0, x.mode, idx(x.payer), x.participants.map(idx),
@@ -1083,6 +1092,7 @@ function decodeState(code){
   const ids = (o.m || []).map(() => uid());
   const built = {
     month: o.month || nowMonth(),
+    periodLabel: String(o.p || ""),
     members: (o.m || []).map(([name, weight], i) => ({ id: ids[i], name: String(name), weight: +weight || 1 })),
     bills: (o.b || []).map(([name, amount, mode, payer, parts, shares]) => ({
       id: uid(), name, amount: +amount || 0,
@@ -1374,6 +1384,13 @@ wireToggleChips(metersBox);
 const monthInput = document.getElementById("month");
 monthInput.value = state.month;
 monthInput.addEventListener("change", () => { state.month = monthInput.value || nowMonth(); save(); });
+/* 周期说明(选填):如租期 9/15–10/14 */
+const periodInput = document.getElementById("period-label");
+periodInput.value = state.periodLabel || "";
+periodInput.addEventListener("input", () => {
+  state.periodLabel = periodInput.value.trim().slice(0, 40);
+  save();
+});
 document.getElementById("btn-lang").onclick = () => setLang(lang === "zh" ? "en" : "zh");
 document.getElementById("btn-theme").onclick = () => cycleTheme();
 
@@ -1439,6 +1456,11 @@ function buildImageCanvas(){
   ctx.font = "400 20px " + F;
   ctx.fillStyle = "rgba(255,255,255,.88)";
   ctx.fillText(state.month, 28, 84);
+  if(state.periodLabel){
+    ctx.font = "400 16px " + F;
+    ctx.fillStyle = "rgba(255,255,255,.85)";
+    ctx.fillText(state.periodLabel, 28, 112);
+  }
   ctx.textAlign = "right";
   ctx.font = "400 15px " + F;
   ctx.fillText(t("copyTotal"), W - 28, 44);
