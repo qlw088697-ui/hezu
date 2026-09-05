@@ -211,6 +211,7 @@
 </main>
 
 <footer><span id="t-footer">HeZu</span> ·
+  <a href="https://github.com/qlw088697-ui/hezu/issues" target="_blank" rel="noopener"><span id="t-feedback">反馈</span></a> ·
   <a href="https://github.com/qlw088697-ui/hezu" target="_blank" rel="noopener">GitHub</a></footer>
 <div id="modal-mask" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -226,7 +227,7 @@
 <script>
 "use strict";
 /* 版本号单一来源:页脚与导出文件名统一引用 */
-const APP_VERSION = "3.0";
+const APP_VERSION = "3.1";
 /* ---------- 多语言 ---------- */
 const I18N = {
   zh: {
@@ -275,7 +276,7 @@ const I18N = {
     themeTitle: "主题", themeAuto: "跟随系统", themeLight: "浅色", themeDark: "深色",
     historyTotal: "总支出约 {x}", loadBtn: "载入",
     viewBtn: "👁️ 查看", detailTitle: "{m} 账单详情", closeBtn: "关闭",
-    detailEmpty: "该月份没有可用数据",
+    detailEmpty: "该月份没有可用数据", metersDetailTitle: "抄表读数",
     loadConfirm: "载入 {m} 将覆盖当前正在编辑的内容,继续吗?(可先\"保存本月到历史\"留存)",
     copyBtn: "复制账单",
     copyConfirm: "将 {m} 的账单和抄表结构复制到本月吗?本月现有的账单和抄表会被覆盖(成员按名字匹配,复制后可撤销)。",
@@ -312,6 +313,7 @@ const I18N = {
     sampleN1: "张三(主卧)", sampleN2: "李四(次卧)", sampleN3: "王五(小卧)",
     sampleB1: "房租", sampleB2: "宽带网费", sampleB3: "清洁用品", sampleM1: "电费", sampleM2: "水费",
     footer: "HeZu v{v} · MIT License · 纯前端应用,所有数据仅保存在本地浏览器",
+    feedbackLink: "反馈",
   },
   en: {
     appTitle: "HeZu Rent Split",
@@ -359,7 +361,7 @@ const I18N = {
     themeTitle: "Theme", themeAuto: "Auto (system)", themeLight: "Light", themeDark: "Dark",
     historyTotal: "Total ≈ {x}", loadBtn: "Load",
     viewBtn: "👁️ View", detailTitle: "Bill details for {m}", closeBtn: "Close",
-    detailEmpty: "No data for this month",
+    detailEmpty: "No data for this month", metersDetailTitle: "Meter readings",
     loadConfirm: "Loading {m} will overwrite your current edits. Continue? (You can \"Save this month\" first)",
     copyBtn: "Copy bills",
     copyConfirm: "Copy {m}'s bills and meter structure into this month? Current bills/meters will be overwritten (members matched by name; you can undo).",
@@ -396,6 +398,7 @@ const I18N = {
     sampleN1: "Zhang (Master)", sampleN2: "Li (Middle)", sampleN3: "Wang (Small)",
     sampleB1: "Rent", sampleB2: "Broadband", sampleB3: "Supplies", sampleM1: "Power", sampleM2: "Water",
     footer: "HeZu v{v} · MIT · A single-file app. All data stays in your browser",
+    feedbackLink: "Feedback",
   },
 };
 let lang = "zh";
@@ -865,6 +868,7 @@ function renderStatic(){
   const footEl = document.getElementById("t-footer");
   if(footEl) footEl.textContent = t("footer").replace("{v}", APP_VERSION);
   set("t-close", "closeBtn");
+  set("t-feedback", "feedbackLink");
   const pi = document.getElementById("period-label");
   if(pi) pi.placeholder = t("periodPh");
   const bi = document.getElementById("batch-input");
@@ -1081,6 +1085,11 @@ function monthDetailHTML(hs){
   let html = `<div class="hint">${t("settleHint").replace("{e}", r.expenses.length).replace("{b}", (hs.bills || []).length).replace("{m}", (hs.meters || []).length)} · ${t("totalTag").replace("{x}", fmt(r.total))}</div>`;
   if(r.expenses.length){
     html += `<div style="margin-top:10px;font-size:13.5px">` + r.expenses.map(e => `· ${esc(e.name)}:${fmt(e.amount)}`).join("<br>") + `</div>`;
+  }
+  if((hs.meters || []).length){
+    html += `<div style="margin-top:10px;font-size:13px;color:var(--muted)">${t("metersDetailTitle")}</div>`;
+    html += `<div style="font-size:13.5px">` + hs.meters.map(mt =>
+      `· ${esc(mt.name || t("meterFallback"))}:${mt.prev ?? "–"} → ${mt.curr ?? "–"} × ${mt.price ?? "–"}`).join("<br>") + `</div>`;
   }
   html += `<table style="margin-top:10px"><thead><tr><th>${t("thMember")}</th><th class="num">${t("thOwed")}</th><th class="num">${t("thPaid")}</th><th class="num">${t("thNet")}</th></tr></thead><tbody>`;
   r.per.forEach(p => {
