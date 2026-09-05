@@ -82,6 +82,9 @@
   details{margin-top:10px;font-size:13.5px;color:var(--muted);}
   summary{cursor:pointer;}
   footer{text-align:center;color:var(--muted);font-size:12.5px;padding:8px 12px 32px;}
+  #modal-mask{position:fixed;inset:0;background:rgba(15,18,30,.55);z-index:8;display:flex;align-items:center;justify-content:center;padding:16px;}
+  #modal-mask[hidden]{display:none;}
+  .modal{background:var(--card);border-radius:14px;max-width:520px;width:100%;max-height:80vh;overflow:auto;padding:18px;box-shadow:var(--shadow);}
   .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#1f2430;color:#fff;
     padding:9px 18px;border-radius:999px;font-size:13.5px;opacity:0;pointer-events:none;transition:.25s;z-index:9;}
   .toast.show{opacity:.95;}
@@ -195,6 +198,15 @@
 
 <footer><span id="t-footer">HeZu v1.3 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器</span> ·
   <a href="https://github.com/qlw088697-ui/hezu" target="_blank" rel="noopener">GitHub</a></footer>
+<div id="modal-mask" hidden>
+  <div class="modal">
+    <div class="row-between">
+      <h2 id="modal-title" style="font-size:16px;margin:0"></h2>
+      <button class="mini" id="modal-close">✕ <span id="t-close"></span></button>
+    </div>
+    <div id="modal-body" style="margin-top:10px"></div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -240,6 +252,9 @@ const I18N = {
     trendTitle: "📈 月度总支出趋势", monthSuffix: "月",
     themeTitle: "主题", themeAuto: "跟随系统", themeLight: "浅色", themeDark: "深色",
     historyTotal: "总支出约 {x}", loadBtn: "载入",
+    viewBtn: "👁️ 查看", detailTitle: "{m} 账单详情", closeBtn: "关闭",
+    detailEmpty: "该月份没有可用数据",
+    loadConfirm: "载入 {m} 将覆盖当前正在编辑的内容,继续吗?(可先\"保存本月到历史\"留存)",
     copyBtn: "复制账单",
     copyConfirm: "将 {m} 的账单和抄表结构复制到本月吗?本月现有的账单和抄表会被覆盖(成员按名字匹配,复制后可撤销)。",
     copyDone: "已从 {m} 复制 {b} 笔账单、{t} 项抄表,请核对本读数",
@@ -311,6 +326,9 @@ const I18N = {
     trendTitle: "📈 Monthly spending trend", monthSuffix: "",
     themeTitle: "Theme", themeAuto: "Auto (system)", themeLight: "Light", themeDark: "Dark",
     historyTotal: "Total ≈ {x}", loadBtn: "Load",
+    viewBtn: "👁️ View", detailTitle: "Bill details for {m}", closeBtn: "Close",
+    detailEmpty: "No data for this month",
+    loadConfirm: "Loading {m} will overwrite your current edits. Continue? (You can \"Save this month\" first)",
     copyBtn: "Copy bills",
     copyConfirm: "Copy {m}'s bills and meter structure into this month? Current bills/meters will be overwritten (members matched by name; you can undo).",
     copyDone: "Copied {b} bills and {t} meters from {m} — please update the current readings",
@@ -673,6 +691,7 @@ function renderStatic(){
   set("t-h-tools", "toolsTitle");
   set("btn-save", "saveMonth"); set("btn-export", "exportJson"); set("btn-import", "importJson"); set("btn-clear", "clearMonth");
   set("t-footer", "footer");
+  set("t-close", "closeBtn");
   const bi = document.getElementById("batch-input");
   if(bi) bi.placeholder = t("batchPh");
   set("t-batch-tip", "batchTip");
@@ -856,6 +875,38 @@ function buildText(){
   return s;
 }
 
+/* 历史月份只读详情弹窗 */
+function monthDetailHTML(hs){
+  const r = computeAllFor(hs);
+  let html = `<div class="hint">${t("settleHint").replace("{e}", r.expenses.length).replace("{b}", (hs.bills || []).length).replace("{m}", (hs.meters || []).length)} · ${t("totalTag").replace("{x}", fmt(r.total))}</div>`;
+  if(r.expenses.length){
+    html += `<div style="margin-top:10px;font-size:13.5px">` + r.expenses.map(e => `· ${esc(e.name)}:${fmt(e.amount)}`).join("<br>") + `</div>`;
+  }
+  html += `<table style="margin-top:10px"><thead><tr><th>${t("thMember")}</th><th class="num">${t("thOwed")}</th><th class="num">${t("thPaid")}</th><th class="num">${t("thNet")}</th></tr></thead><tbody>`;
+  r.per.forEach(p => {
+    const bal = p.balance > 0 ? "+" + fmt(p.balance) : p.balance < 0 ? "-" + fmt(-p.balance) : fmt(0);
+    const cls = p.balance > 0 ? "pos" : (p.balance < 0 ? "neg" : "");
+    html += `<tr><td>${esc(p.m.name)}</td><td class="num">${fmt(p.owed)}</td><td class="num">${fmt(p.paid)}</td><td class="num ${cls}">${bal}</td></tr>`;
+  });
+  html += `</tbody></table>`;
+  if(r.transfers.length){
+    html += `<div style="margin-top:12px;font-size:13px;color:var(--muted)">${t("transfersTitle")}</div>`;
+    html += r.transfers.map(tr => `<div class="transfer">🧑 ${esc(tr.from.name)} <span class="arrow">→</span> ${esc(tr.to.name)}<span class="v">${fmt(tr.amount)}</span></div>`).join("");
+  }
+  if(r.unpaid > 0) html += `<div class="hint" style="color:var(--warn);margin-top:8px">${t("unpaidWarn").replace("{x}", fmt(r.unpaid))}</div>`;
+  if(r.hasAbnormal) html += `<div class="hint" style="color:var(--warn);margin-top:8px">${t("abnormalWarn")}</div>`;
+  return html;
+}
+function openDetail(mo){
+  const hs = history[mo];
+  document.getElementById("modal-title").textContent = t("detailTitle").replace("{m}", mo);
+  document.getElementById("modal-body").innerHTML = hs ? monthDetailHTML(hs) : `<div class="empty">${t("detailEmpty")}</div>`;
+  document.getElementById("modal-mask").hidden = false;
+}
+function closeDetail(){ document.getElementById("modal-mask").hidden = true; }
+
+/* 历史月份只读详情弹窗结束 */
+
 function renderHistory(){
   const box = document.getElementById("history");
   const months = Object.keys(history).sort().reverse();
@@ -867,6 +918,7 @@ function renderHistory(){
         (h.meters||[]).forEach(mt => { if(mt.curr >= mt.prev) total += Math.round((mt.curr - mt.prev) * (mt.price||0) * 100); });
         return `<div class="history-item"><b>${esc(mo)}</b>
           <span class="hint">${t("historyTotal").replace("{x}", fmt(total))}</span><span class="grow"></span>
+          <button class="mini" data-act="his-view" data-mo="${esc(mo)}">${t("viewBtn")}</button>
           <button class="mini" data-act="his-copy" data-mo="${esc(mo)}" title="${t("copyBtn")}">${t("copyBtn")}</button>
           <button class="mini ghost" data-act="his-load" data-mo="${esc(mo)}">${t("loadBtn")}</button>
           <button class="mini danger" data-act="his-del" data-mo="${esc(mo)}">${t("del")}</button></div>`;
@@ -1373,9 +1425,14 @@ document.getElementById("btn-save").onclick = () => {
 document.getElementById("history").addEventListener("click", e => {
   const btn = e.target.closest("[data-act]"); if(!btn) return;
   const mo = btn.dataset.mo;
+  if(btn.dataset.act === "his-view"){ openDetail(btn.dataset.mo); return; }
   if(btn.dataset.act === "his-load"){
-    if(history[mo]){ state = sanitizeState(JSON.parse(JSON.stringify(history[mo])), mo); save();
-      monthInput.value = state.month; renderAll(); toast(t("loaded").replace("{m}", mo)); }
+    if(history[mo]){
+      const hasCurrent = state.members.length || state.bills.length || state.meters.length;
+      if(hasCurrent && !confirm(t("loadConfirm").replace("{m}", mo))) return;
+      state = sanitizeState(JSON.parse(JSON.stringify(history[mo])), mo); save();
+      monthInput.value = state.month; renderAll(); toast(t("loaded").replace("{m}", mo));
+    }
   }
   if(btn.dataset.act === "his-copy"){
     const src = history[mo]; if(!src) return;
@@ -1442,6 +1499,10 @@ load();
   }catch(e){}
 })();
 renderAll();
+/* 启动后的弹窗与工具交互 */
+document.getElementById("modal-close").onclick = closeDetail;
+document.getElementById("modal-mask").addEventListener("click", e => { if(e.target.id === "modal-mask") closeDetail(); });
+
 /* PWA:HTTPS 环境注册 Service Worker,支持离线与添加到主屏幕 */
 if("serviceWorker" in navigator && location.protocol === "https:"){
   navigator.serviceWorker.register("./sw.js").catch(() => {});
