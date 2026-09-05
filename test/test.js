@@ -239,8 +239,13 @@ assert(withLabel.periodLabel.length <= 40 && withLabel.periodLabel.startsWith("�
 /* 3) 分享链接编解码往返 */
 const shareSeg = script.split("/* ---------- 示例数据 ---------- */")[1].split("/* ---------- 事件 ---------- */")[0];
 const api2 = new Function(core + shareSeg + `
+  globalThis.localStorage = { getItem(){ return null; }, setItem(){}, removeItem(){} };
+  globalThis.document = { getElementById(){ return { textContent:"", innerHTML:"", value:"",
+    classList:{ add(){}, remove(){} }, querySelector(){ return null; }, style:{}, focus(){} }; } };
+  globalThis.renderAll = () => {};
   state = null;
-  return { encodeState, decodeState, setState: (s) => { state = s; } };`)();
+  return { encodeState, decodeState, setState: (s) => { state = s; },
+    loadSample, stateRef: () => state };`)();
 api2.setState({
   month: "2026-09",
   members: [{ id: "a", name: "张三", weight: 1.5 }, { id: "b", name: "李四", weight: 1 }, { id: "c", name: "王五", weight: 1 }],
@@ -268,6 +273,12 @@ assert(url.length < 8000, "分享链接长度可控(" + url.length + " 字符 < 
 /* 周期说明在分享链接中保留 */
 api2.setState({ month: "2026-09", periodLabel: "9/15–10/14", members: [{ id: "a", name: "A", weight: 1 }], bills: [], meters: [], rooms: [] });
 assert(api2.decodeState(api2.encodeState()).periodLabel === "9/15–10/14", "周期说明在分享链接中保留");
+
+/* 载入示例保留周期说明 */
+api2.setState({ month: "2026-09", periodLabel: "租期 9/15–10/14", members: [], bills: [], meters: [], rooms: [] });
+api2.loadSample();
+assert(api2.stateRef().periodLabel === "租期 9/15–10/14", "载入示例不丢失周期说明");
+assert(api2.stateRef().members.length === 3, "载入示例数据完整");
 
 console.log(failed === 0 ? "\n全部通过 ✅" : `\n${failed} 项失败 ❌`);
 process.exit(failed === 0 ? 0 : 1);

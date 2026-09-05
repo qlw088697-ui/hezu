@@ -1055,6 +1055,7 @@ function loadSample(){
   const a = uid(), b = uid(), c = uid();
   state = {
     month: state ? state.month : nowMonth(),
+    periodLabel: state ? (state.periodLabel || "") : "",
     members: [
       { id: a, name: t("sampleN1"), weight: 1.5 },
       { id: b, name: t("sampleN2"), weight: 1 },
