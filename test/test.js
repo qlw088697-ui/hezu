@@ -22,7 +22,7 @@ function makeApi(initState){
     return {
       setState: (s) => { state = s; },
       fmt, splitEqual, splitWeight, expenseOfBill, expenseOfMeter, computeAll,
-      roomRentOf, sanitizeState, settlementCsv, copyBillsFromMonth, parseBackup,
+      roomRentOf, sanitizeState, settlementCsv, copyBillsFromMonth, parseBackup, computeAllFor,
     };`);
 }
 const sampleState = {
@@ -180,6 +180,20 @@ assert(Object.keys(parsed.history).length === 1 && parsed.history["2026-08"].mem
 assert(api.parseBackup({ members: [] }) === null, "非备份 JSON 返回 null(走单月导入)");
 assert(api.parseBackup({ app: "hezu", current: {}, history: [] }) === null, "history 为数组时拒绝");
 assert(api.parseBackup(null) === null, "空数据拒绝");
+
+/* computeAllFor:对历史快照计算且不污染当前状态 */
+api.setState(sampleState);
+const altState = {
+  month: "2026-01",
+  members: [{ id: "q1", name: "Q", weight: 1 }],
+  bills: [{ id: "qb", name: "B", amount: 9000, mode: "equal", shares: {}, payer: "", participants: ["q1"] }],
+  meters: [], rooms: [],
+};
+const rAlt = api.computeAllFor(altState);
+assert(rAlt.total === 9000 && rAlt.per[0].owed === 9000, "computeAllFor 对快照正确结算");
+assert(api.computeAll().total === 315000, "computeAllFor 不影响当前状态(仍为原账单)");
+const rAgain = api.computeAllFor(altState);
+assert(rAgain.total === 9000, "computeAllFor 可重复调用");
 
 /* 3) 分享链接编解码往返 */
 const shareSeg = script.split("/* ---------- 示例数据 ---------- */")[1].split("/* ---------- 事件 ---------- */")[0];

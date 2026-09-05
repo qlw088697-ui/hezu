@@ -89,13 +89,19 @@
   .history-item .grow{flex:1;}
   @media (max-width:560px){ .cols-3{grid-template-columns:1fr 1fr;} }
   @media (prefers-color-scheme: dark){
-    :root{
+    :root:not([data-theme=light]){
       --bg:#12151f; --card:#1b2030; --line:#2b3247; --text:#e8eaf2; --muted:#9aa3b8;
       --primary-soft:#262d4a; --field:#171c2a;
       --shadow:0 1px 2px rgba(0,0,0,.25),0 8px 24px rgba(0,0,0,.25);
     }
-    .tag{background:#242b3e;color:var(--muted);}
+    :root:not([data-theme=light]) .tag{background:#242b3e;color:var(--muted);}
   }
+  :root[data-theme=dark]{
+    --bg:#12151f; --card:#1b2030; --line:#2b3247; --text:#e8eaf2; --muted:#9aa3b8;
+    --primary-soft:#262d4a; --field:#171c2a;
+    --shadow:0 1px 2px rgba(0,0,0,.25),0 8px 24px rgba(0,0,0,.25);
+  }
+  :root[data-theme=dark] .tag{background:#242b3e;color:var(--muted);}
   @media print{
     body{background:#fff;color:#000;}
     header{background:none !important;color:#000;padding:8px 0;}
@@ -112,7 +118,8 @@
     <div class="month-row">
       <label for="month" id="t-month-label">账单月份</label>
       <input type="month" id="month">
-      <button class="mini" id="btn-lang" style="margin-left:auto;background:rgba(255,255,255,.16);border-color:transparent;color:#fff" title="切换语言 / Switch language">EN</button>
+      <button class="mini" id="btn-theme" style="background:rgba(255,255,255,.16);border-color:transparent;color:#fff" title="主题">🌓</button>
+      <button class="mini" id="btn-lang" style="background:rgba(255,255,255,.16);border-color:transparent;color:#fff" title="切换语言 / Switch language">EN</button>
     </div>
   </div>
 </header>
@@ -231,6 +238,7 @@ const I18N = {
     toolsTitle: "保存与记录", saveMonth: "保存本月到历史",
     exportJson: "导出 JSON", importJson: "导入 JSON", clearMonth: "清空本月",
     trendTitle: "📈 月度总支出趋势", monthSuffix: "月",
+    themeTitle: "主题", themeAuto: "跟随系统", themeLight: "浅色", themeDark: "深色",
     historyTotal: "总支出约 {x}", loadBtn: "载入",
     copyBtn: "复制账单",
     copyConfirm: "将 {m} 的账单和抄表结构复制到本月吗?本月现有的账单和抄表会被覆盖(成员按名字匹配,复制后可撤销)。",
@@ -262,7 +270,7 @@ const I18N = {
     copyTransfers: "转账", copyTotal: "合计", copyBy: "由「合租账本 HeZu」计算",
     sampleN1: "张三(主卧)", sampleN2: "李四(次卧)", sampleN3: "王五(小卧)",
     sampleB1: "房租", sampleB2: "宽带网费", sampleB3: "清洁用品", sampleM1: "电费", sampleM2: "水费",
-    footer: "HeZu v1.7 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器",
+    footer: "HeZu v1.8 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器",
   },
   en: {
     appTitle: "HeZu Rent Split",
@@ -301,6 +309,7 @@ const I18N = {
     toolsTitle: "Save & records", saveMonth: "Save this month",
     exportJson: "Export JSON", importJson: "Import JSON", clearMonth: "Clear month",
     trendTitle: "📈 Monthly spending trend", monthSuffix: "",
+    themeTitle: "Theme", themeAuto: "Auto (system)", themeLight: "Light", themeDark: "Dark",
     historyTotal: "Total ≈ {x}", loadBtn: "Load",
     copyBtn: "Copy bills",
     copyConfirm: "Copy {m}'s bills and meter structure into this month? Current bills/meters will be overwritten (members matched by name; you can undo).",
@@ -332,7 +341,7 @@ const I18N = {
     copyTransfers: "Transfers", copyTotal: "Total", copyBy: "computed by HeZu",
     sampleN1: "Zhang (Master)", sampleN2: "Li (Middle)", sampleN3: "Wang (Small)",
     sampleB1: "Rent", sampleB2: "Broadband", sampleB3: "Supplies", sampleM1: "Power", sampleM2: "Water",
-    footer: "HeZu v1.7 · MIT · A single-file app. All data stays in your browser",
+    footer: "HeZu v1.8 · MIT · A single-file app. All data stays in your browser",
   },
 };
 let lang = "zh";
@@ -346,6 +355,27 @@ function setLang(l){
   lang = l;
   try{ localStorage.setItem("hezu:lang", l); }catch(e){}
   renderAll();
+}
+/* 主题:auto 跟随系统 / light / dark,手动切换后持久化 */
+let theme = "auto";
+try{
+  const savedTheme = localStorage.getItem("hezu:theme");
+  if(savedTheme === "light" || savedTheme === "dark" || savedTheme === "auto") theme = savedTheme;
+}catch(e){}
+function applyTheme(){
+  const root = document.documentElement;
+  if(theme === "auto") delete root.dataset.theme;
+  else root.dataset.theme = theme;
+  const btn = document.getElementById("btn-theme");
+  if(btn){
+    btn.textContent = theme === "dark" ? "🌙" : (theme === "light" ? "☀️" : "🌓");
+    btn.title = t("themeTitle") + ": " + t("theme" + theme.charAt(0).toUpperCase() + theme.slice(1));
+  }
+}
+function cycleTheme(){
+  theme = theme === "auto" ? "light" : (theme === "light" ? "dark" : "auto");
+  try{ localStorage.setItem("hezu:theme", theme); }catch(e){}
+  applyTheme();
 }
 
 /* ---------- 状态 ---------- */
@@ -553,6 +583,13 @@ function computeAll(){
   const hasAbnormal = state.meters.some(mt => mt.curr < mt.prev);
   return { expenses, per, transfers, total, unpaid, hasAbnormal };
 }
+/* 在不干扰当前编辑状态的前提下,对任一状态快照跑一遍结算(同步、无副作用) */
+function computeAllFor(s){
+  const prev = state;
+  state = s;
+  try{ return computeAll(); }
+  finally{ state = prev; }
+}
 /* 结算表 CSV(带引号转义,CRLF 行尾) */
 function settlementCsv(){
   const r = computeAll();
@@ -642,6 +679,7 @@ function renderStatic(){
   set("btn-batch-confirm", "batchAdd");
   const bl = document.getElementById("btn-lang");
   if(bl) bl.textContent = lang === "zh" ? "EN" : "中文";
+  applyTheme();
 }
 
 function memberChips(selected, onToggleAttr){
@@ -896,31 +934,53 @@ function decodeState(code){
   return sanitizeState(built, built.month);
 }
 
-/* 月度总支出趋势(纯 SVG,无依赖) */
+/* 月度总支出趋势:每人一段彩色堆叠(纯 SVG,无依赖) */
 function renderTrend(){
   const box = document.getElementById("trend");
   const months = Object.keys(history).sort().slice(-12);
   if(months.length < 2){ box.innerHTML = ""; return; }
+  const palette = ["#5b6cff", "#12a594", "#f59e0b", "#e5484d", "#8f5bff", "#0ea5e9", "#d6409f", "#f76b15"];
   const data = months.map(mo => {
-    const h = history[mo]; let total = 0;
-    (h.bills || []).forEach(b => total += b.amount || 0);
-    (h.meters || []).forEach(mt => {
-      if(mt.prev != null && mt.curr != null && mt.curr >= mt.prev)
-        total += Math.round(((mt.curr || 0) - (mt.prev || 0)) * (mt.price || 0) * 100);
-    });
-    return { mo, total };
+    const hs = history[mo];
+    let per = [], total = 0;
+    try{
+      const r = computeAllFor(hs);
+      per = r.per.map(p => ({ name: p.m.name, owed: p.owed }));
+      total = r.total;
+    }catch(e){
+      (hs.bills || []).forEach(b => total += b.amount || 0);
+    }
+    const stack = per.reduce((s, p) => s + p.owed, 0);
+    return { mo, total, stack, per };
   });
-  const max = Math.max(...data.map(d => d.total), 1);
-  const W = 720, H = 180, pad = 8, bw = (W - pad * 2) / data.length;
-  const bars = data.map((d, i) => {
-    const h = Math.max(4, Math.round((H - 46) * d.total / max));
-    const x = pad + i * bw + 4, w = Math.max(10, bw - 8), y = H - 34 - h;
-    return `<g><title>${esc(d.mo)}:${fmt(d.total)}</title>
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="#5b6cff" opacity="${i === data.length - 1 ? 1 : 0.45}"></rect>
-      <text x="${x + w / 2}" y="${y - 6}" text-anchor="middle" font-size="11" fill="var(--muted)">${(d.total / 100).toFixed(0)}</text>
-      <text x="${x + w / 2}" y="${H - 16}" text-anchor="middle" font-size="11" fill="var(--muted)">${esc(d.mo.slice(5))}${t("monthSuffix")}</text></g>`;
-  }).join("");
+  /* 成员配色按首次出现顺序分配 */
+  const memberColors = {};
+  let ci = 0;
+  data.forEach(d => d.per.forEach(p => {
+    if(!(p.name in memberColors)){ memberColors[p.name] = palette[ci % palette.length]; ci++; }
+  }));
+  const max = Math.max(...data.map(d => d.stack), 1);
+  const W = 720, H = 190, pad = 8, bw = (W - pad * 2) / data.length;
+  const base = H - 34, maxH = base - 26;
+  let bars = "";
+  data.forEach((d, i) => {
+    const x = pad + i * bw + 4, w = Math.max(10, bw - 8);
+    let yAcc = base, segs = "";
+    d.per.filter(p => p.owed > 0).forEach(p => {
+      const h = Math.max(2, Math.round(maxH * p.owed / max));
+      yAcc -= h;
+      segs += `<rect x="${x}" y="${yAcc}" width="${w}" height="${h}" fill="${memberColors[p.name]}"><title>${esc(d.mo)} · ${esc(p.name)}:${fmt(p.owed)}</title></rect>`;
+    });
+    const stackH = base - yAcc;
+    bars += `<g>${segs}
+      <title>${esc(d.mo)}:${fmt(d.stack)}</title>
+      <text x="${x + w / 2}" y="${yAcc - 6}" text-anchor="middle" font-size="11" fill="var(--muted)">${(d.stack / 100).toFixed(0)}</text>
+      <text x="${x + w / 2}" y="${H - 12}" text-anchor="middle" font-size="11" fill="var(--muted)">${esc(d.mo.slice(5))}${t("monthSuffix")}</text></g>`;
+  });
+  const legend = Object.keys(memberColors).map(n =>
+    `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px"><span style="width:10px;height:10px;border-radius:3px;background:${memberColors[n]};display:inline-block"></span>${esc(n)}</span>`).join("");
   box.innerHTML = `<div style="font-size:13px;color:var(--muted);margin:10px 0 2px">${t("trendTitle")}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:4px">${legend}</div>
     <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${bars}</svg>`;
 }
 
@@ -1137,6 +1197,7 @@ const monthInput = document.getElementById("month");
 monthInput.value = state.month;
 monthInput.addEventListener("change", () => { state.month = monthInput.value || nowMonth(); save(); });
 document.getElementById("btn-lang").onclick = () => setLang(lang === "zh" ? "en" : "zh");
+document.getElementById("btn-theme").onclick = () => cycleTheme();
 
 /* 复制文本 */
 document.getElementById("btn-copy").onclick = async () => {
