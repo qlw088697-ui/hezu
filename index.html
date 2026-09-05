@@ -227,7 +227,7 @@
 <script>
 "use strict";
 /* 版本号单一来源:页脚与导出文件名统一引用 */
-const APP_VERSION = "3.1";
+const APP_VERSION = "3.2";
 /* ---------- 多语言 ---------- */
 const I18N = {
   zh: {
@@ -247,6 +247,7 @@ const I18N = {
     emptyBills: "暂无账单项,点\"添加账单\"录入房租、网络费等",
     billNamePh: "账单名称", amountLabel: "金额(元)", splitLabel: "分摊方式", payerLabel: "垫付人",
     participantsLabel: "参与人(点击切换)", shareOf: "{n} 承担(元)",
+    noteLabel: "备注(选填)", notePh: "如:高温空调费", copyNote: "备注",
     sumOk: "✓ 份额合计 {x}", sumDiff: "份额合计 {a},与金额相差 {b},请核对",
     metersTitle: "抄表计费(水、电、燃气)", addMeter: "＋ 添加抄表",
     metersHint: "填上期/本期读数和单价,自动算出金额(本期读数应 ≥ 上期读数)。",
@@ -332,6 +333,7 @@ const I18N = {
     emptyBills: "No bills yet — click \"Add bill\" to add rent, internet, etc.",
     billNamePh: "Bill name", amountLabel: "Amount", splitLabel: "Split by", payerLabel: "Paid by",
     participantsLabel: "Participants (click to toggle)", shareOf: "{n} pays",
+    noteLabel: "Note (optional)", notePh: "e.g. summer AC usage", copyNote: "Note",
     sumOk: "✓ Shares add up to {x}", sumDiff: "Shares add up to {a}, differs by {b} — please check",
     metersTitle: "Meter readings (water, power, gas)", addMeter: "＋ Add meter",
     metersHint: "Enter previous/current readings and unit price; the amount is computed automatically (current should be ≥ previous).",
@@ -498,7 +500,7 @@ function sanitizeState(raw, fallbackMonth){
     if(mode === "custom" && b.shares && typeof b.shares === "object")
       Object.keys(b.shares).forEach(id => { if(idset.has(id)) shares[id] = centsOf(b.shares[id]); });
     s.bills.push({ id: uid(), name: clip(b.name, 40), amount: centsOf(b.amount), mode, shares,
-      payer: payer(b.payer), participants });
+      note: clip(b.note, 60), payer: payer(b.payer), participants });
   });
   (Array.isArray(raw.meters) ? raw.meters : []).slice(0, 100).forEach(mt => {
     mt = mt && typeof mt === "object" ? mt : {};
@@ -558,7 +560,8 @@ function memberName(id){ const m = memberById(id); return m ? m.name : "?"; }
 /* 金额一律用"分"计算,避免浮点误差 */
 function toCents(v){ const n = parseFloat(v); return isFinite(n) ? Math.round(n * 100) : 0; }
 function yuan(cents){ return (cents/100).toFixed(2); }
-function fmt(cents){ return "¥" + yuan(cents); }
+/* 显示用:带千分位;CSV 等数据导出用 yuan() 保持原始数值 */
+function fmt(cents){ return "¥" + (cents/100).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 /* 均摊:余数分给前几个人,保证合计相等 */
 function splitEqual(amountCents, ids){
@@ -609,7 +612,7 @@ function expenseOfBill(b){
   }else{
     shares = splitEqual(amount, parts);
   }
-  return { name: b.name || t("billFallback"), amount, shares, payer: b.payer || "", parts, missingRooms, mode: b.mode };
+    return { name: b.name || t("billFallback"), amount, shares, payer: b.payer || "", parts, missingRooms, mode: b.mode, note: b.note || "" };
 }
 function expenseOfMeter(mt){
   const amount = Math.max(0, Math.round(((mt.curr || 0) - (mt.prev || 0)) * (mt.price || 0) * 100));
@@ -977,6 +980,7 @@ function renderBills(){
         <div class="field"><label>${t("payerLabel")}</label><select data-act="bill-payer">${payerOptions(b.payer)}</select></div>
       </div>
       <div class="field"><label>${t("participantsLabel")}</label>${memberChips(b.participants, "data-act-toggle")}</div>
+      <div class="field" style="margin-top:8px"><label>${t("noteLabel")}</label><input type="text" list="name-list" data-act="bill-note" value="${esc(b.note || "")}" maxlength="60" placeholder="${t("notePh")}"></div>
       ${b.mode === "custom" ? `
         <div class="grid cols-3" style="margin-top:8px">
           ${b.participants.map(id => `
@@ -1062,6 +1066,7 @@ function buildText(){
     s += `\n—— ${t("copyDetails")} ——\n`;
     r.expenses.forEach(e => {
       let line = `· ${e.name}:${fmt(e.amount)}`;
+      if(e.note) line += `(${t("copyNote")}:${e.note})`;
       if(e.mode === "custom" || e.mode === "room"){
         line += `(${e.parts.map(id => `${memberName(id)} ${fmt(e.shares[id] || 0)}`).join("/")})`;
       }
@@ -1156,7 +1161,7 @@ function loadSample(){
       { id: c, name: t("sampleN3"), weight: 1 },
     ],
     bills: [
-      { id: uid(), name: t("sampleB1"), amount: 360000, mode: "weight", shares: {}, payer: a, participants: [a,b,c] },
+      { id: uid(), name: t("sampleB1"), amount: 360000, mode: "weight", shares: {}, payer: a, participants: [a,b,c], note: "" },
       { id: uid(), name: t("sampleB2"), amount: 9900, mode: "equal", shares: {}, payer: c, participants: [a,b,c] },
       { id: uid(), name: t("sampleB3"), amount: 4500, mode: "equal", shares: {}, payer: b, participants: [a,c] },
     ],
@@ -1177,7 +1182,7 @@ function encodeState(){
     m: state.members.map(x => [x.name, x.weight]),
     r: (state.rooms || []).map(x => [x.name || "", x.rent || 0, idx(x.occupantId)]),
     b: state.bills.map(x => [x.name || "", x.amount || 0, x.mode, idx(x.payer), x.participants.map(idx),
-      x.mode === "custom" ? x.participants.map(p => (x.shares || {})[p] || 0) : [] ]),
+      x.mode === "custom" ? x.participants.map(p => (x.shares || {})[p] || 0) : [], x.note || "" ]),
     t: state.meters.map(x => [x.name || "", x.prev, x.curr, x.price, x.mode, idx(x.payer), x.participants.map(idx)]),
   };
   return btoa(encodeURIComponent(JSON.stringify(o)));
@@ -1189,11 +1194,12 @@ function decodeState(code){
     month: o.month || nowMonth(),
     periodLabel: String(o.p || ""),
     members: (o.m || []).map(([name, weight], i) => ({ id: ids[i], name: String(name), weight: +weight || 1 })),
-    bills: (o.b || []).map(([name, amount, mode, payer, parts, shares]) => ({
+    bills: (o.b || []).map(([name, amount, mode, payer, parts, shares, note]) => ({
       id: uid(), name, amount: +amount || 0,
-      mode: ["equal","weight","custom"].includes(mode) ? mode : "equal",
+      mode: ["equal","weight","custom","room"].includes(mode) ? mode : "equal",
       payer: payer >= 0 ? ids[payer] : "",
       participants: (parts || []).filter(i => i >= 0).map(i => ids[i]),
+      note: String(note || ""),
       shares: mode === "custom" ? Object.fromEntries((parts || []).map((p, i) => [ids[p], +(shares || [])[i] || 0])) : {},
     })),
     meters: (o.t || []).map(([name, prev, curr, price, mode, payer, parts]) => ({
@@ -1431,6 +1437,7 @@ billsBox.addEventListener("input", e => {
   const b = state.bills.find(x => x.id === item.dataset.id); if(!b) return;
   const a = e.target.dataset.act;
   if(a === "bill-name") b.name = e.target.value;
+  if(a === "bill-note") b.note = e.target.value.slice(0, 60);
   if(a === "bill-amount"){
     b.amount = toCents(e.target.value);
     const amt = item.querySelector(".amt"); if(amt) amt.textContent = fmt(b.amount || 0);

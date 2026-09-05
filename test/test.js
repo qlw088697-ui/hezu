@@ -281,6 +281,22 @@ assert(decoded.bills[1].participants.length === 2, "参与人映射正确");
 const url = "https://qlw088697-ui.github.io/hezu/#d=" + code;
 assert(url.length < 8000, "分享链接长度可控(" + url.length + " 字符 < 8000)");
 
+/* 金额千分位显示 */
+assert(api.fmt(123456789) === "¥1,234,567.89", "大额金额千分位(" + api.fmt(123456789) + ")");
+assert(api.fmt(80000) === "¥800.00", "小额金额不受影响");
+
+/* 账单备注:消毒截断 + 复制文本包含 + 分享链接保留 */
+const noteClean = api.sanitizeState({ month: "2026-09", members: [{ id: "a", name: "A" }],
+  bills: [{ name: "电费", amount: 10000, note: "x".repeat(80) }] }, "2026-09");
+assert(noteClean.bills[0].note.length <= 60, "备注截断至 60 字符");
+api.setState({ month: "2026-09", periodLabel: "9/15–10/14",
+  members: [{ id: "a", name: "A", weight: 1 }], bills: [], meters: [], rooms: [] });
+api2.setState({ month: "2026-09", periodLabel: "9/15–10/14",
+  members: [{ id: "a", name: "A", weight: 1 }],
+  bills: [{ id: "b1", name: "电费", amount: 20240, mode: "equal", shares: {}, payer: "", participants: ["a"], note: "高温空调" }],
+  meters: [], rooms: [] });
+assert(api2.decodeState(api2.encodeState()).bills[0].note === "高温空调", "备注在分享链接中保留");
+
 /* 周期说明在分享链接中保留 */
 api2.setState({ month: "2026-09", periodLabel: "9/15–10/14", members: [{ id: "a", name: "A", weight: 1 }], bills: [], meters: [], rooms: [] });
 assert(api2.decodeState(api2.encodeState()).periodLabel === "9/15–10/14", "周期说明在分享链接中保留");
