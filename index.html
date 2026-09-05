@@ -874,16 +874,18 @@ function modeOptions(sel, withCustom){
   return opts.map(([v, label]) => `<option value="${v}" ${sel===v?"selected":""}>${label}</option>`).join("");
 }
 
+function updateDupWarn(){
+  const dupEl = document.getElementById("dup-warn");
+  if(!dupEl) return;
+  const dups = findDupNames(state.members);
+  dupEl.hidden = !dups.length;
+  if(dups.length) dupEl.textContent = t("dupNamesWarn").replace("{n}", dups.length).replace("{names}", dups.slice(0, 3).join("、"));
+}
 function renderMembers(){
   const box = document.getElementById("members");
   document.getElementById("member-count").textContent =
     state.members.length ? state.members.length + t("peopleSuffix") : t("membersEmptyTag");
-  const dups = findDupNames(state.members);
-  const dupEl = document.getElementById("dup-warn");
-  if(dupEl){
-    dupEl.hidden = !dups.length;
-    if(dups.length) dupEl.textContent = t("dupNamesWarn").replace("{n}", dups.length).replace("{names}", dups.slice(0, 3).join("、"));
-  }
+  updateDupWarn();
   box.innerHTML = state.members.map(m => `
     <div class="member-row" data-id="${m.id}">
       <input type="text" class="nm" data-act="member-name" value="${esc(m.name)}" placeholder="${t("namePh")}">
@@ -1234,6 +1236,7 @@ membersBox.addEventListener("input", e => {
   if(e.target.dataset.act === "member-name") m.name = e.target.value;
   if(e.target.dataset.act === "member-weight") m.weight = Math.max(0, parseFloat(e.target.value) || 0);
   save();
+  updateDupWarn();
 });
 /* 在姓名输入框按回车,快速追加下一位租客并聚焦 */
 membersBox.addEventListener("keydown", e => {
