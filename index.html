@@ -161,6 +161,7 @@
       <span class="hint grow" id="settle-hint"></span>
       <button class="ghost" id="btn-copy">📋 复制为文本(发群里)</button>
       <button class="ghost" id="btn-share">🔗 复制分享链接</button>
+      <button class="ghost" id="btn-image">🖼️ 存为图片</button>
       <button class="ghost" id="btn-print">🖨️ 打印 / 存 PDF</button>
     </div>
   </section>
@@ -169,9 +170,10 @@
     <h2>🗄️ <span id="t-h-tools">保存与记录</span></h2>
   <p class="hint" id="t-hint-tools">数据仅保存在此浏览器中;清除浏览器数据前,记得先导出 JSON 备份。</p>
     <div class="row-between" style="margin-top:10px">
-      <button class="primary" id="btn-save">保存本月到历史</button>
-      <span class="grow"></span>
-      <button id="btn-export">导出 JSON</button>
+    <button class="primary" id="btn-save">保存本月到历史</button>
+    <span class="grow"></span>
+    <button id="btn-csv">📊 导出结算 CSV</button>
+    <button id="btn-export">导出 JSON</button>
       <button id="btn-import">导入 JSON</button>
       <input type="file" id="file-import" accept=".json,application/json" hidden>
       <button class="danger" id="btn-clear">清空本月</button>
@@ -221,6 +223,8 @@ const I18N = {
     unpaidWarn: "⚠️ 有 {x} 的支出没有填垫付人,这部分金额不会出现在转账方案里(请自行缴纳或补填垫付人)",
     abnormalWarn: "⚠️ 有抄表项本期读数小于上期,请检查后重新计算",
     copyText: "📋 复制为文本(发群里)", copyShare: "🔗 复制分享链接", printBtn: "🖨️ 打印 / 存 PDF",
+    imageBtn: "🖼️ 存为图片", imageSaved: "图片已生成并下载 🖼️",
+    csvBtn: "📊 导出结算 CSV", csvSaved: "CSV 已导出 📊",
     settleHint: "共 {e} 笔支出 · {b} 笔账单 + {m} 项抄表",
     toolsTitle: "保存与记录", saveMonth: "保存本月到历史",
     exportJson: "导出 JSON", importJson: "导入 JSON", clearMonth: "清空本月",
@@ -249,7 +253,7 @@ const I18N = {
     copyTransfers: "转账", copyTotal: "合计", copyBy: "由「合租账本 HeZu」计算",
     sampleN1: "张三(主卧)", sampleN2: "李四(次卧)", sampleN3: "王五(小卧)",
     sampleB1: "房租", sampleB2: "宽带网费", sampleB3: "清洁用品", sampleM1: "电费", sampleM2: "水费",
-    footer: "HeZu v1.4 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器",
+    footer: "HeZu v1.5 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器",
   },
   en: {
     appTitle: "HeZu Rent Split",
@@ -282,6 +286,8 @@ const I18N = {
     unpaidWarn: "⚠️ {x} of expenses has no payer recorded — it won't appear in transfers (pay it yourself or fill in the payer)",
     abnormalWarn: "⚠️ A meter's current reading is lower than previous — please check",
     copyText: "📋 Copy as text (for group chat)", copyShare: "🔗 Copy share link", printBtn: "🖨️ Print / Save PDF",
+    imageBtn: "🖼️ Save as image", imageSaved: "Image generated and downloaded 🖼️",
+    csvBtn: "📊 Export settlement CSV", csvSaved: "CSV exported 📊",
     settleHint: "{e} expenses · {b} bills + {m} meters",
     toolsTitle: "Save & records", saveMonth: "Save this month",
     exportJson: "Export JSON", importJson: "Import JSON", clearMonth: "Clear month",
@@ -310,7 +316,7 @@ const I18N = {
     copyTransfers: "Transfers", copyTotal: "Total", copyBy: "computed by HeZu",
     sampleN1: "Zhang (Master)", sampleN2: "Li (Middle)", sampleN3: "Wang (Small)",
     sampleB1: "Rent", sampleB2: "Broadband", sampleB3: "Supplies", sampleM1: "Power", sampleM2: "Water",
-    footer: "HeZu v1.4 · MIT · A single-file app. All data stays in your browser",
+    footer: "HeZu v1.5 · MIT · A single-file app. All data stays in your browser",
   },
 };
 let lang = "zh";
@@ -531,6 +537,21 @@ function computeAll(){
   const hasAbnormal = state.meters.some(mt => mt.curr < mt.prev);
   return { expenses, per, transfers, total, unpaid, hasAbnormal };
 }
+/* 结算表 CSV(带引号转义,CRLF 行尾) */
+function settlementCsv(){
+  const r = computeAll();
+  const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const lines = [
+    [t("thMember"), t("thOwed"), t("thPaid"), t("thNet")].map(q).join(","),
+    ...r.per.map(p => [p.m.name, yuan(p.owed), yuan(p.paid), yuan(p.balance)].map(q).join(",")),
+  ];
+  if(r.transfers.length){
+    lines.push("");
+    lines.push([t("copyTransfers"), "", ""].map(q).join(","));
+    r.transfers.forEach(tr => lines.push([tr.from.name, "→ " + tr.to.name, yuan(tr.amount)].map(q).join(",")));
+  }
+  return lines.join("\r\n");
+}
 
 /* ---------- 渲染 ---------- */
 function renderAll(){ renderStatic(); renderMembers(); renderRooms(); renderBills(); renderMeters(); renderResult(); renderHistory(); renderTrend(); renderDatalist(); }
@@ -548,7 +569,8 @@ function renderStatic(){
   set("t-h-bills", "billsTitle"); set("btn-add-bill", "addBill");
   set("t-h-meters", "metersTitle"); set("btn-add-meter", "addMeter"); set("t-hint-meters", "metersHint");
   set("t-h-result", "resultTitle");
-  set("btn-copy", "copyText"); set("btn-share", "copyShare"); set("btn-print", "printBtn");
+  set("btn-copy", "copyText"); set("btn-share", "copyShare"); set("btn-image", "imageBtn"); set("btn-print", "printBtn");
+  set("btn-csv", "csvBtn");
   set("t-h-tools", "toolsTitle");
   set("btn-save", "saveMonth"); set("btn-export", "exportJson"); set("btn-import", "importJson"); set("btn-clear", "clearMonth");
   set("t-footer", "footer");
@@ -1078,6 +1100,119 @@ document.getElementById("btn-share").onclick = async () => {
   }
 };
 document.getElementById("btn-print").onclick = () => window.print();
+
+/* 结算结果卡片 → PNG 下载(纯 Canvas,零依赖) */
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function exportImage(){
+  if(!state.members.length){ toast(t("shareNeedMembers")); return; }
+  const r = computeAll();
+  const S = 2, W = 640;
+  const rowH = 62;
+  const cardH = 16 + r.per.length * rowH + 14;
+  const transfersH = r.transfers.length ? 78 + (r.transfers.length - 1) * 42 : 46;
+  const H = 154 + cardH + transfersH + 54;
+  const cv = document.createElement("canvas");
+  cv.width = W * S; cv.height = H * S;
+  const ctx = cv.getContext("2d");
+  if(!ctx){ toast(t("copyFailShort")); return; }
+  ctx.scale(S, S);
+  const F = "'PingFang SC','Hiragino Sans GB','Microsoft YaHei',system-ui,-apple-system,sans-serif";
+  // 背景 + 渐变页眉
+  ctx.fillStyle = "#f4f6fb"; ctx.fillRect(0, 0, W, H);
+  const grad = ctx.createLinearGradient(0, 0, W, 130);
+  grad.addColorStop(0, "#5b6cff"); grad.addColorStop(1, "#8f5bff");
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, 130);
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#fff";
+  ctx.font = "600 28px " + F;
+  ctx.fillText(t("appTitle") + " HeZu", 28, 48);
+  ctx.font = "400 20px " + F;
+  ctx.fillStyle = "rgba(255,255,255,.88)";
+  ctx.fillText(state.month, 28, 84);
+  ctx.textAlign = "right";
+  ctx.font = "400 15px " + F;
+  ctx.fillText(t("copyTotal"), W - 28, 44);
+  ctx.font = "600 26px " + F;
+  ctx.fillStyle = "#fff";
+  ctx.fillText(fmt(r.total), W - 28, 84);
+  // 明细卡片
+  const cardY = 154;
+  ctx.fillStyle = "#fff";
+  roundRect(ctx, 20, cardY, W - 40, cardH, 14); ctx.fill();
+  r.per.forEach((p, i) => {
+    const y0 = cardY + 14 + i * rowH;
+    if(i > 0){
+      ctx.strokeStyle = "#eef0f5"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(40, y0); ctx.lineTo(W - 40, y0); ctx.stroke();
+    }
+    ctx.textAlign = "left"; ctx.fillStyle = "#1f2430";
+    ctx.font = "600 21px " + F;
+    ctx.fillText(p.m.name, 44, y0 + 27);
+    ctx.font = "400 15px " + F; ctx.fillStyle = "#7a8194";
+    ctx.fillText(t("thOwed") + " " + fmt(p.owed) + " · " + t("thPaid") + " " + fmt(p.paid), 44, y0 + 50);
+    ctx.textAlign = "right";
+    ctx.font = "600 21px " + F;
+    ctx.fillStyle = p.balance > 0 ? "#12a594" : (p.balance < 0 ? "#e5484d" : "#7a8194");
+    ctx.fillText((p.balance > 0 ? "+" : p.balance < 0 ? "-" : "") + fmt(Math.abs(p.balance)), W - 44, y0 + 30);
+  });
+  // 转账方案
+  const ty = cardY + cardH + 34;
+  ctx.textAlign = "left"; ctx.fillStyle = "#7a8194";
+  ctx.font = "400 17px " + F;
+  if(r.transfers.length){
+    ctx.fillText(t("transfersTitle"), 40, ty);
+    r.transfers.forEach((tr, i) => {
+      const y = ty + 34 + i * 42;
+      ctx.fillStyle = "#eef0ff";
+      roundRect(ctx, 24, y - 26, W - 48, 36, 10); ctx.fill();
+      ctx.fillStyle = "#1f2430"; ctx.font = "600 18px " + F;
+      ctx.fillText(tr.from.name + " → " + tr.to.name, 40, y);
+      ctx.textAlign = "right"; ctx.fillStyle = "#5b6cff";
+      ctx.fillText(fmt(tr.amount), W - 40, y);
+      ctx.textAlign = "left";
+    });
+  }else{
+    ctx.fillText(r.unpaid > 0 ? t("noInternal") : t("settledNone"), 40, ty);
+  }
+  // 页脚
+  ctx.textAlign = "center"; ctx.fillStyle = "#9aa3b8";
+  ctx.font = "400 14px " + F;
+  ctx.fillText(t("copyBy"), W / 2, H - 20);
+  // 下载
+  cv.toBlob(blob => {
+    if(!blob){ toast(t("copyFailShort")); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "hezu-" + state.month + ".png";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast(t("imageSaved"));
+  }, "image/png");
+}
+document.getElementById("btn-image").onclick = () => {
+  try{ exportImage(); }
+  catch(e){ toast(t("copyFailShort")); }
+};
+document.getElementById("btn-csv").onclick = () => {
+  if(!state.members.length){ toast(t("shareNeedMembers")); return; }
+  try{
+    const blob = new Blob(["\uFEFF" + settlementCsv()], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "hezu-" + state.month + ".csv";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast(t("csvSaved"));
+  }catch(e){ toast(t("copyFailShort")); }
+};
 
 /* 历史与导入导出 */
 document.getElementById("btn-save").onclick = () => {

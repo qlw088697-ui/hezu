@@ -22,7 +22,7 @@ function makeApi(initState){
     return {
       setState: (s) => { state = s; },
       fmt, splitEqual, splitWeight, expenseOfBill, expenseOfMeter, computeAll,
-      roomRentOf, sanitizeState,
+      roomRentOf, sanitizeState, settlementCsv,
     };`);
 }
 const sampleState = {
@@ -121,6 +121,15 @@ assert(clean.meters[0].mode === "equal", "未知抄表分摊方式回退");
 assert(clean.rooms[0].rent === 0 && clean.rooms[0].occupantId === "", "房间负租金与未知住客被钳制");
 assert(Array.isArray(clean.rooms) && clean.rooms.length === 2, "数组长度仍在白名单范围内");
 assert(!("extra" in clean), "消毒器丢弃未知字段");
+
+/* 结算 CSV 输出 */
+api.setState(sampleState);
+const csv = api.settlementCsv();
+assert(csv.includes('"租客","应付","已垫付","净额(正=应收)"'), "CSV 表头");
+assert(csv.includes('"张三","800.00","3000.00","2200.00"'), "CSV 数据行(应付/垫付/净额)");
+assert(csv.includes('"王五","→ 张三","1460.00"'), "CSV 转账行");
+assert(csv.includes("\r\n"), "CSV 使用 CRLF 行尾");
+assert(!csv.includes(",800,"), "CSV 字段均带引号包裹");
 
 /* 3) 分享链接编解码往返 */
 const shareSeg = script.split("/* ---------- 示例数据 ---------- */")[1].split("/* ---------- 事件 ---------- */")[0];
