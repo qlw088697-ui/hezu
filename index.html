@@ -226,7 +226,7 @@
 <script>
 "use strict";
 /* 版本号单一来源:页脚与导出文件名统一引用 */
-const APP_VERSION = "2.8";
+const APP_VERSION = "2.9";
 /* ---------- 多语言 ---------- */
 const I18N = {
   zh: {
@@ -268,7 +268,7 @@ const I18N = {
     csvBillsFail: "CSV 解析失败:文件需有包含\"名称\"和\"金额\"的表头行",
     csvBillsEmpty: "没有可导入的账单行",
     settleHint: "共 {e} 笔支出 · {b} 笔账单 + {m} 项抄表",
-    toolsTitle: "保存与记录", saveMonth: "保存本月到历史",
+    toolsTitle: "保存与记录", saveMonth: "保存本月到历史", updateMonth: "更新本月到历史",
     exportJson: "导出 JSON", importJson: "导入 JSON", clearMonth: "清空本月",
     trendTitle: "📈 月度总支出趋势", monthSuffix: "月",
     aggTitle: "📊 累计统计(已保存 {n} 个月,总支出 {x})", aggTotal: "总计",
@@ -291,7 +291,7 @@ const I18N = {
     emptyHistory: "暂无历史月份,点\"保存本月到历史\"留存一份",
     copied: "已复制,去粘贴到群里吧 ✌️", copyFail: "复制失败,请手动选择文本",
     shareNeedMembers: "先添加租客,再生成分享链接", shareCopied: "分享链接已复制,发给室友吧 🔗", copyFailShort: "复制失败",
-    saved: "已保存 {m} 的账单 📦", loaded: "已载入 {m}", imported: "导入成功 ✅", importFail: "导入失败:文件格式不对",
+    saved: "已保存 {m} 的账单 📦", updated: "已更新 {m} 的历史 📦", loaded: "已载入 {m}", imported: "导入成功 ✅", importFail: "导入失败:文件格式不对",
     cleared: "已清空", deleted: "已删除", undo: "撤销", restored: "已恢复 ✅", sampleLoaded: "已载入示例数据,随便改 🎉",
     memberDefault: "租客", saveFail: "保存失败:浏览器存储空间不足或被禁用",
     roomsTitle: "房间(可选)", addRoom: "＋ 添加房间",
@@ -352,7 +352,7 @@ const I18N = {
     csvBillsFail: "CSV parsing failed: the file needs a header row with \"Name\" and \"Amount\" columns",
     csvBillsEmpty: "No importable bill rows",
     settleHint: "{e} expenses · {b} bills + {m} meters",
-    toolsTitle: "Save & records", saveMonth: "Save this month",
+    toolsTitle: "Save & records", saveMonth: "Save this month", updateMonth: "Update this month",
     exportJson: "Export JSON", importJson: "Import JSON", clearMonth: "Clear month",
     trendTitle: "📈 Monthly spending trend", monthSuffix: "",
     aggTitle: "📊 All-time stats ({n} saved months, total {x})", aggTotal: "Total",
@@ -375,7 +375,7 @@ const I18N = {
     emptyHistory: "No saved months yet — click \"Save this month\" to keep one",
     copied: "Copied! Paste it into the group ✌️", copyFail: "Copy failed, please select the text manually",
     shareNeedMembers: "Add roommates before sharing", shareCopied: "Share link copied — send it to your roommates 🔗", copyFailShort: "Copy failed",
-    saved: "Saved {m} 📦", loaded: "Loaded {m}", imported: "Imported ✅", importFail: "Import failed: bad file format",
+    saved: "Saved {m} 📦", updated: "Updated {m} 📦", loaded: "Loaded {m}", imported: "Imported ✅", importFail: "Import failed: bad file format",
     cleared: "Cleared", deleted: "Deleted", undo: "Undo", restored: "Restored ✅", sampleLoaded: "Sample loaded — edit freely 🎉",
     memberDefault: "Roommate", saveFail: "Save failed: browser storage is full or disabled",
     roomsTitle: "Rooms (optional)", addRoom: "＋ Add room",
@@ -606,7 +606,7 @@ function expenseOfBill(b){
   }else{
     shares = splitEqual(amount, parts);
   }
-  return { name: b.name || t("billFallback"), amount, shares, payer: b.payer || "", parts, missingRooms };
+  return { name: b.name || t("billFallback"), amount, shares, payer: b.payer || "", parts, missingRooms, mode: b.mode };
 }
 function expenseOfMeter(mt){
   const amount = Math.max(0, Math.round(((mt.curr || 0) - (mt.prev || 0)) * (mt.price || 0) * 100));
@@ -821,9 +821,15 @@ function labelize(){
     if(label && ctrl) ctrl.setAttribute("aria-label", label.textContent.trim());
   });
 }
+/* 保存按钮智能文案:当月已在历史中时显示"更新" */
+function updateSaveBtn(){
+  const b = document.getElementById("btn-save");
+  if(b) b.textContent = history[state.month] ? t("updateMonth") : t("saveMonth");
+}
 function renderAll(){
   renderStatic(); renderMembers(); renderRooms(); renderBills(); renderMeters(); renderResult(); renderHistory(); renderTrend(); renderAggregate(); renderDatalist();
   labelize();
+  updateSaveBtn();
   const pi = document.getElementById("period-label");
   if(pi && document.activeElement !== pi) pi.value = state.periodLabel || "";
 }
@@ -1041,7 +1047,13 @@ function buildText(){
   let s = `🏠 ${state.month}${state.periodLabel ? `(${state.periodLabel})` : ""} ${t("copyBillTitle")}\n`;
   if(r.expenses.length){
     s += `\n—— ${t("copyDetails")} ——\n`;
-    r.expenses.forEach(e => s += `· ${e.name}:${fmt(e.amount)}\n`);
+    r.expenses.forEach(e => {
+      let line = `· ${e.name}:${fmt(e.amount)}`;
+      if(e.mode === "custom" || e.mode === "room"){
+        line += `(${e.parts.map(id => `${memberName(id)} ${fmt(e.shares[id] || 0)}`).join("/")})`;
+      }
+      s += line + "\n";
+    });
   }
   s += `\n—— ${t("copyOwed")} ——\n`;
   r.per.forEach(p => s += `· ${p.m.name}:${fmt(p.owed)}${p.paid ? `(${t("copyPaidPrefix")} ${fmt(p.paid)})` : ""}\n`);
@@ -1456,7 +1468,7 @@ wireToggleChips(metersBox);
 /* 月份 */
 const monthInput = document.getElementById("month");
 monthInput.value = state.month;
-monthInput.addEventListener("change", () => { state.month = monthInput.value || nowMonth(); save(); });
+monthInput.addEventListener("change", () => { state.month = monthInput.value || nowMonth(); save(); updateSaveBtn(); });
 /* 周期说明(选填):如租期 9/15–10/14 */
 const periodInput = document.getElementById("period-label");
 periodInput.value = state.periodLabel || "";
@@ -1684,8 +1696,10 @@ document.getElementById("file-csv-bills").addEventListener("change", async e => 
 
 /* 历史与导入导出 */
 document.getElementById("btn-save").onclick = () => {
+  const wasUpdate = !!history[state.month];
   history[state.month] = JSON.parse(JSON.stringify(state));
-  save(); renderAll(); toast(t("saved").replace("{m}", state.month));
+  save(); renderAll();
+  toast((wasUpdate ? t("updated") : t("saved")).replace("{m}", state.month));
 };
 document.getElementById("history").addEventListener("click", e => {
   const btn = e.target.closest("[data-act]"); if(!btn) return;
