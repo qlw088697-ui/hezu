@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>合租账本 HeZu — 合租费用分摊计算器</title>
+<meta name="description" content="合租费用分摊计算器:房租均摊/按权重、水电燃气抄表计费、垫付自动结算。纯前端,数据不上传。">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+<style>
+  :root{
+    --bg:#f4f6fb; --card:#ffffff; --line:#e6e9f2; --text:#1f2430; --muted:#7a8194;
+    --primary:#5b6cff; --primary-soft:#eef0ff; --danger:#e5484d; --ok:#12a594; --warn:#d97706;
+    --radius:14px; --shadow:0 1px 2px rgba(20,24,40,.05),0 8px 24px rgba(20,24,40,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;}
+  header{background:linear-gradient(135deg,#5b6cff,#8f5bff);color:#fff;padding:28px 16px 88px;}
+  .wrap{max-width:760px;margin:0 auto;}
+  header h1{margin:0;font-size:24px;display:flex;align-items:center;gap:10px;}
+  header p{margin:6px 0 0;opacity:.85;font-size:13.5px;}
+  .month-row{margin-top:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .month-row label{font-size:13px;opacity:.9;}
+  input[type=month]{border:none;border-radius:8px;padding:7px 10px;font-size:14px;color:var(--text);}
+  main{margin-top:-64px;padding:0 12px 40px;}
+  section{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:18px;margin:14px 0;}
+  h2{font-size:16px;margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  h2 .grow{flex:1;}
+  .hint{color:var(--muted);font-size:13px;margin:6px 0 0;}
+  .empty{color:var(--muted);font-size:13.5px;text-align:center;padding:14px 0;}
+  button{font:inherit;cursor:pointer;border-radius:9px;border:1px solid var(--line);
+    background:#fff;color:var(--text);padding:6px 12px;transition:.15s;}
+  button:hover{border-color:#c9cfdd;}
+  button.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+  button.primary:hover{filter:brightness(1.06);}
+  button.ghost{background:var(--primary-soft);border-color:transparent;color:var(--primary);}
+  button.danger{color:var(--danger);}
+  button.mini{padding:2px 9px;font-size:12.5px;}
+  button:disabled{opacity:.45;cursor:not-allowed;}
+  input[type=text],input[type=number],select{font:inherit;padding:7px 10px;border:1px solid var(--line);
+    border-radius:9px;background:#fff;color:var(--text);width:100%;}
+  input:focus,select:focus{outline:2px solid var(--primary-soft);border-color:var(--primary);}
+  .grid{display:grid;gap:10px;}
+  .cols-2{grid-template-columns:1fr 1fr;}
+  .cols-3{grid-template-columns:2fr 1fr 1fr;}
+  .field label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px;}
+  .item{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px;}
+  .item-head{display:flex;align-items:center;gap:8px;}
+  .item-head .name{font-weight:600;}
+  .item-head .amt{margin-left:auto;font-weight:600;font-variant-numeric:tabular-nums;}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .chip{border:1px solid var(--line);border-radius:999px;padding:3px 11px;font-size:12.5px;
+    cursor:pointer;user-select:none;background:#fff;color:var(--muted);}
+  .chip.on{background:var(--primary-soft);border-color:var(--primary);color:var(--primary);font-weight:600;}
+  .member-row{display:flex;gap:8px;align-items:center;margin-top:8px;}
+  .member-row input.w{width:76px;}
+  .member-row .nm{flex:1;}
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;}
+  th{color:var(--muted);font-weight:500;font-size:12.5px;}
+  td.num,th.num{text-align:right;}
+  .pos{color:var(--ok);font-weight:600;}
+  .neg{color:var(--danger);font-weight:600;}
+  .transfer{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--primary-soft);
+    border-radius:10px;margin-top:8px;font-weight:600;}
+  .transfer .arrow{color:var(--primary);}
+  .transfer .v{margin-left:auto;color:var(--primary);}
+  .row-between{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .row-between .grow{flex:1;}
+  .tag{font-size:11.5px;padding:2px 8px;border-radius:999px;background:#f1f3f9;color:var(--muted);}
+  .tag.warn{background:#fdf1e2;color:var(--warn);}
+  details{margin-top:10px;font-size:13.5px;color:var(--muted);}
+  summary{cursor:pointer;}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;padding:8px 12px 32px;}
+  .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#1f2430;color:#fff;
+    padding:9px 18px;border-radius:999px;font-size:13.5px;opacity:0;pointer-events:none;transition:.25s;z-index:9;}
+  .toast.show{opacity:.95;}
+  .history-item{display:flex;align-items:center;gap:8px;padding:8px 2px;border-bottom:1px solid var(--line);}
+  .history-item .grow{flex:1;}
+  @media (max-width:560px){ .cols-3{grid-template-columns:1fr 1fr;} }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>🏠 合租账本 <span style="font-weight:400;font-size:15px;opacity:.8">HeZu</span></h1>
+    <p>合租费用分摊计算器 · 均摊 / 按权重 / 抄表计费 / 垫付结算 · 数据只存在你的浏览器里</p>
+    <div class="month-row">
+      <label for="month">账单月份</label>
+      <input type="month" id="month">
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section id="sec-members">
+    <h2>👥 租客 <span class="tag" id="member-count"></span><span class="grow"></span>
+      <button class="primary mini" id="btn-add-member">＋ 添加租客</button></h2>
+    <p class="hint">权重用于"按权重"分摊:比如主卧 1.5、次卧 1。均摊模式不受权重影响。</p>
+    <div id="members"></div>
+  </section>
+
+  <section id="sec-bills">
+    <h2>🧾 账单项(房租、网络、清洁用品…)<span class="grow"></span>
+      <button class="primary mini" id="btn-add-bill">＋ 添加账单</button></h2>
+    <div id="bills"></div>
+  </section>
+
+  <section id="sec-meters">
+    <h2>💡 抄表计费(水、电、燃气)<span class="grow"></span>
+      <button class="primary mini" id="btn-add-meter">＋ 添加抄表</button></h2>
+    <p class="hint">填上期/本期读数和单价,自动算出金额(本期读数应 ≥ 上期读数)。</p>
+    <div id="meters"></div>
+  </section>
+
+  <section id="sec-result">
+    <h2>💰 结算结果 <span class="tag" id="total-tag"></span></h2>
+    <div id="result"></div>
+    <div style="margin-top:14px" class="row-between">
+      <span class="hint grow" id="settle-hint"></span>
+      <button class="ghost" id="btn-copy">📋 复制为文本(发群里)</button>
+    </div>
+  </section>
+
+  <section id="sec-tools">
+    <h2>🗄️ 保存与记录</h2>
+    <div class="row-between" style="margin-top:10px">
+      <button class="primary" id="btn-save">保存本月到历史</button>
+      <span class="grow"></span>
+      <button id="btn-export">导出 JSON</button>
+      <button id="btn-import">导入 JSON</button>
+      <input type="file" id="file-import" accept=".json,application/json" hidden>
+      <button class="danger" id="btn-clear">清空本月</button>
+    </div>
+    <div id="history" style="margin-top:8px"></div>
+  </section>
+
+</main>
+
+<footer>HeZu · MIT License · 纯前端应用,所有数据仅保存在本地浏览器 ·
+  <a href="https://github.com/qlw088697-ui/hezu" target="_blank" rel="noopener">GitHub</a></footer>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ---------- 状态 ---------- */
+const LS_CUR = "hezu:v1:current", LS_HIS = "hezu:v1:history";
+let state = null;
+let history = {};
+
+function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(36).slice(2)); }
+function nowMonth(){ const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); }
+function blankState(){ return { month: nowMonth(), members: [], bills: [], meters: [] }; }
+
+function load(){
+  try{ state = JSON.parse(localStorage.getItem(LS_CUR)) || blankState(); }
+  catch(e){ state = blankState(); }
+  try{ history = JSON.parse(localStorage.getItem(LS_HIS)) || {}; }catch(e){ history = {}; }
+  if(!state.month) state.month = nowMonth();
+}
+function save(){
+  localStorage.setItem(LS_CUR, JSON.stringify(state));
+  localStorage.setItem(LS_HIS, JSON.stringify(history));
+}
+
+/* ---------- 工具 ---------- */
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function toast(msg){ const t = document.getElementById("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 1800); }
+function memberById(id){ return state.members.find(m => m.id === id); }
+function memberName(id){ const m = memberById(id); return m ? m.name : "?"; }
+
+/* 金额一律用"分"计算,避免浮点误差 */
+function toCents(v){ const n = parseFloat(v); return isFinite(n) ? Math.round(n * 100) : 0; }
+function yuan(cents){ return (cents/100).toFixed(2); }
+function fmt(cents){ return "¥" + yuan(cents); }
+
+/* 均摊:余数分给前几个人,保证合计相等 */
+function splitEqual(amountCents, ids){
+  const out = {}; if(!ids.length) return out;
+  const base = Math.floor(amountCents / ids.length);
+  let rest = amountCents - base * ids.length;
+  ids.forEach(id => { out[id] = base + (rest-- > 0 ? 1 : 0); });
+  return out;
+}
+/* 按权重:最大余数法 */
+function splitWeight(amountCents, entries){ // entries: [{id, weight}]
+  const out = {}; const list = entries.filter(e => e.weight > 0);
+  if(!list.length) return splitEqual(amountCents, entries.map(e => e.id));
+  const W = list.reduce((s,e) => s + e.weight, 0);
+  const frac = [];
+  let used = 0;
+  list.forEach(e => {
+    const exact = amountCents * e.weight / W;
+    const base = Math.floor(exact);
+    out[e.id] = base; used += base; frac.push({ id: e.id, r: exact - base });
+  });
+  let rest = amountCents - used;
+  frac.sort((a,b) => b.r - a.r);
+  for(let i = 0; rest > 0; i++, rest--){ out[frac[i % frac.length].id] += 1; }
+  return out;
+}
+
+/* ---------- 计算 ---------- */
+function expenseOfBill(b){
+  const parts = b.participants.filter(id => memberById(id));
+  let shares = {};
+  if(b.mode === "custom"){
+    parts.forEach(id => { shares[id] = toCents((b.shares && b.shares[id]) || 0); });
+  }else if(b.mode === "weight"){
+    shares = splitWeight(b.amount, parts.map(id => ({ id, weight: (memberById(id)||{}).weight || 1 })));
+  }else{
+    shares = splitEqual(b.amount, parts);
+  }
+  return { name: b.name || "账单", amount: b.amount, shares, payer: b.payer || "", parts };
+}
+function expenseOfMeter(mt){
+  const amount = Math.max(0, Math.round(((mt.curr || 0) - (mt.prev || 0)) * (mt.price || 0) * 100));
+  const parts = mt.participants.filter(id => memberById(id));
+  let shares;
+  if(mt.mode === "weight"){
+    shares = splitWeight(amount, parts.map(id => ({ id, weight: (memberById(id)||{}).weight || 1 })));
+  }else{
+    shares = splitEqual(amount, parts);
+  }
+  return { name: mt.name || "抄表", amount, shares, payer: mt.payer || "", parts,
+           abnormal: mt.prev != null && mt.curr != null && mt.curr < mt.prev };
+}
+function computeAll(){
+  const owed = {}, paid = {};
+  state.members.forEach(m => { owed[m.id] = 0; paid[m.id] = 0; });
+  const expenses = [];
+  state.bills.forEach(b => {
+    if(!b.amount || !b.participants.length) return;
+    const e = expenseOfBill(b); expenses.push(e);
+    for(const id in e.shares){ owed[id] = (owed[id]||0) + e.shares[id]; }
+    if(e.payer && memberById(e.payer)) paid[e.payer] += e.amount;
+  });
+  state.meters.forEach(mt => {
+    if(!mt.participants.length) return;
+    const e = expenseOfMeter(mt);
+    if(!e.amount) return;
+    expenses.push(e);
+    for(const id in e.shares){ owed[id] = (owed[id]||0) + e.shares[id]; }
+    if(e.payer && memberById(e.payer)) paid[e.payer] += e.amount;
+  });
+  const per = state.members.map(m => {
+    const o = owed[m.id]||0, p = paid[m.id]||0;
+    return { m, owed: o, paid: p, balance: p - o };
+  });
+  /* 贪心结算:欠得最多的先收钱 */
+  const debtors = per.filter(x => x.balance < 0).map(x => ({...x})).sort((a,b) => a.balance - b.balance);
+  const creditors = per.filter(x => x.balance > 0).map(x => ({...x})).sort((a,b) => b.balance - a.balance);
+  const transfers = [];
+  let i = 0, j = 0;
+  while(i < debtors.length && j < creditors.length){
+    const d = debtors[i], c = creditors[j];
+    const t = Math.min(-d.balance, c.balance);
+    if(t > 0) transfers.push({ from: d.m, to: c.m, amount: t });
+    d.balance += t; c.balance -= t;
+    if(-d.balance < 1e-9) i++;
+    if(c.balance < 1e-9) j++;
+  }
+  const total = expenses.reduce((s,e) => s + e.amount, 0);
+  const hasAbnormal = state.meters.some(mt => mt.curr < mt.prev);
+  return { expenses, per, transfers, total, hasAbnormal };
+}
+
+/* ---------- 渲染 ---------- */
+function renderAll(){ renderMembers(); renderBills(); renderMeters(); renderResult(); renderHistory(); }
+
+function memberChips(selected, onToggleAttr){
+  if(!state.members.length) return `<span class="hint">先添加租客</span>`;
+  return `<div class="chips">` + state.members.map(m =>
+    `<span class="chip ${selected.includes(m.id) ? "on" : ""}" ${onToggleAttr}="${m.id}">${esc(m.name)}</span>`
+  ).join("") + `</div>`;
+}
+function payerOptions(sel){
+  return `<option value="">(无人垫付)</option>` + state.members.map(m =>
+    `<option value="${m.id}" ${m.id === sel ? "selected" : ""}>${esc(m.name)}</option>`).join("");
+}
+function modeOptions(sel, withCustom){
+  const opts = [["equal","均摊"],["weight","按权重"]];
+  if(withCustom) opts.push(["custom","自定义份额"]);
+  return opts.map(([v,t]) => `<option value="${v}" ${sel===v?"selected":""}>${t}</option>`).join("");
+}
+
+function renderMembers(){
+  const box = document.getElementById("members");
+  document.getElementById("member-count").textContent = state.members.length ? state.members.length + " 人" : "还没添加";
+  box.innerHTML = state.members.map(m => `
+    <div class="member-row" data-id="${m.id}">
+      <input type="text" class="nm" data-act="member-name" value="${esc(m.name)}" placeholder="姓名">
+      <input type="number" class="w" data-act="member-weight" value="${m.weight}" min="0" step="0.1" title="权重">
+      <button class="danger mini" data-act="member-del">删除</button>
+    </div>`).join("") ||
+    `<div class="empty">还没有租客,点右上角"添加租客"开始 🎉</div>`;
+}
+
+function renderBills(){
+  const box = document.getElementById("bills");
+  box.innerHTML = state.bills.map(b => `
+    <div class="item" data-id="${b.id}">
+      <div class="item-head">
+        <input type="text" data-act="bill-name" value="${esc(b.name)}" placeholder="账单名称" style="font-weight:600;flex:1">
+        <span class="amt">${fmt(b.amount||0)}</span>
+        <button class="danger mini" data-act="bill-del">删除</button>
+      </div>
+      <div class="grid cols-3" style="margin-top:10px">
+        <div class="field"><label>金额(元)</label><input type="number" data-act="bill-amount" value="${b.amount ? (b.amount/100) : ""}" min="0" step="0.01" placeholder="0.00"></div>
+        <div class="field"><label>分摊方式</label><select data-act="bill-mode">${modeOptions(b.mode, true)}</select></div>
+        <div class="field"><label>垫付人</label><select data-act="bill-payer">${payerOptions(b.payer)}</select></div>
+      </div>
+      <div class="field"><label>参与人(点击切换)</label>${memberChips(b.participants, "data-act-toggle")}</div>
+      ${b.mode === "custom" ? `
+        <div class="grid cols-3" style="margin-top:8px">
+          ${b.participants.map(id => `
+            <div class="field"><label>${esc(memberName(id))} 承担(元)</label>
+              <input type="number" data-act="bill-share" data-mid="${id}" value="${b.shares && b.shares[id] ? (b.shares[id]/100) : ""}" min="0" step="0.01"></div>`).join("")}
+        </div>` : ""}
+    </div>`).join("") ||
+    `<div class="empty">暂无账单项,点"添加账单"录入房租、网络费等</div>`;
+}
+
+function renderMeters(){
+  const box = document.getElementById("meters");
+  box.innerHTML = state.meters.map(mt => {
+    const abnormal = mt.prev != null && mt.curr != null && mt.curr < mt.prev;
+    const amount = Math.max(0, Math.round(((mt.curr || 0) - (mt.prev || 0)) * (mt.price || 0) * 100));
+    return `
+    <div class="item" data-id="${mt.id}">
+      <div class="item-head">
+        <input type="text" data-act="meter-name" value="${esc(mt.name)}" placeholder="如:电费" style="font-weight:600;flex:1">
+        <span class="amt">${fmt(amount)}</span>
+        <span class="tag warn" data-warn ${abnormal ? "" : "hidden"}>本期读数小于上期,请检查</span>
+        <button class="danger mini" data-act="meter-del">删除</button>
+      </div>
+      <div class="grid cols-3" style="margin-top:10px">
+        <div class="field"><label>上期读数</label><input type="number" data-act="meter-prev" value="${mt.prev ?? ""}" step="0.01"></div>
+        <div class="field"><label>本期读数</label><input type="number" data-act="meter-curr" value="${mt.curr ?? ""}" step="0.01"></div>
+        <div class="field"><label>单价(元/度·吨·方)</label><input type="number" data-act="meter-price" value="${mt.price ?? ""}" min="0" step="0.0001"></div>
+      </div>
+      <div class="grid cols-2">
+        <div class="field"><label>分摊方式</label><select data-act="meter-mode">${modeOptions(mt.mode, false)}</select></div>
+        <div class="field"><label>垫付人</label><select data-act="meter-payer">${payerOptions(mt.payer)}</select></div>
+      </div>
+      <div class="field"><label>参与人(点击切换)</label>${memberChips(mt.participants, "data-act-toggle")}</div>
+    </div>`;
+  }).join("") ||
+  `<div class="empty">暂无抄表项,点"添加抄表"录入水/电/燃气读数</div>`;
+}
+
+function renderResult(){
+  const box = document.getElementById("result");
+  const r = computeAll();
+  document.getElementById("total-tag").textContent = state.members.length ? ("本月总支出 " + fmt(r.total)) : "";
+  if(!state.members.length){
+    box.innerHTML = `<div class="empty">添加租客后,这里会显示每人应付和互相转账方案</div>`;
+    document.getElementById("settle-hint").textContent = "";
+    return;
+  }
+  let html = `<table><thead><tr>
+      <th>租客</th><th class="num">应付</th><th class="num">已垫付</th><th class="num">净额(正=应收)</th>
+    </tr></thead><tbody>`;
+  r.per.forEach(p => {
+    const cls = p.balance > 0 ? "pos" : (p.balance < 0 ? "neg" : "");
+    const bal = p.balance > 0 ? "+" + fmt(p.balance) : p.balance < 0 ? "-" + fmt(-p.balance) : fmt(0);
+    html += `<tr><td>${esc(p.m.name)}</td><td class="num">${fmt(p.owed)}</td>
+      <td class="num">${fmt(p.paid)}</td><td class="num ${cls}">${bal}</td></tr>`;
+  });
+  html += `</tbody></table>`;
+  if(r.transfers.length){
+    html += `<div style="margin-top:14px;font-size:13px;color:var(--muted)">转账方案(按此转账即可两清):</div>`;
+    html += r.transfers.map(t => `
+      <div class="transfer">🧑 ${esc(t.from.name)} <span class="arrow">→</span> ${esc(t.to.name)}
+        <span class="v">${fmt(t.amount)}</span></div>`).join("");
+  }else{
+    html += `<div class="empty" style="padding:10px 0">✅ 账目已两清,无需转账</div>`;
+  }
+  if(r.hasAbnormal) html += `<div class="hint" style="color:var(--warn)">⚠️ 有抄表项本期读数小于上期,请检查后重新计算</div>`;
+  box.innerHTML = html;
+  document.getElementById("settle-hint").textContent =
+    `共 ${r.expenses.length} 笔支出 · ${state.bills.length} 笔账单 + ${state.meters.length} 项抄表`;
+}
+
+function buildText(){
+  const r = computeAll();
+  let s = `🏠 ${state.month} 合租账单\n`;
+  if(r.expenses.length){
+    s += `\n—— 明细 ——\n`;
+    r.expenses.forEach(e => s += `· ${e.name}:${fmt(e.amount)}\n`);
+  }
+  s += `\n—— 每人应付 ——\n`;
+  r.per.forEach(p => s += `· ${p.m.name}:${fmt(p.owed)}${p.paid ? `(已垫付 ${fmt(p.paid)})` : ""}\n`);
+  if(r.transfers.length){
+    s += `\n—— 转账 ——\n`;
+    r.transfers.forEach(t => s += `· ${t.from.name} → ${t.to.name}:${fmt(t.amount)}\n`);
+  }
+  s += `\n合计:${fmt(r.total)} · 由「合租账本 HeZu」计算`;
+  return s;
+}
+
+function renderHistory(){
+  const box = document.getElementById("history");
+  const months = Object.keys(history).sort().reverse();
+  box.innerHTML = months.length
+    ? months.map(mo => {
+        const h = history[mo];
+        let total = 0;
+        (h.bills||[]).forEach(b => total += b.amount||0);
+        (h.meters||[]).forEach(mt => { if(mt.curr >= mt.prev) total += Math.round((mt.curr - mt.prev) * (mt.price||0) * 100); });
+        return `<div class="history-item"><b>${esc(mo)}</b>
+          <span class="hint">总支出约 ${fmt(total)}</span><span class="grow"></span>
+          <button class="mini ghost" data-act="his-load" data-mo="${esc(mo)}">载入</button>
+          <button class="mini danger" data-act="his-del" data-mo="${esc(mo)}">删除</button></div>`;
+      }).join("")
+    : `<div class="empty">暂无历史月份,点"保存本月到历史"留存一份</div>`;
+}
+
+/* ---------- 事件 ---------- */
+function delegate(root, fn){
+  root.addEventListener("click", e => {
+    const btn = e.target.closest("[data-act]");
+    if(btn && root.contains(btn)) fn(btn, e);
+  });
+}
+const membersBox = document.getElementById("members");
+membersBox.addEventListener("input", e => {
+  const row = e.target.closest(".member-row"); if(!row) return;
+  const m = memberById(row.dataset.id); if(!m) return;
+  if(e.target.dataset.act === "member-name") m.name = e.target.value;
+  if(e.target.dataset.act === "member-weight") m.weight = Math.max(0, parseFloat(e.target.value) || 0);
+  save();
+});
+delegate(membersBox, btn => {
+  if(btn.dataset.act !== "member-del") return;
+  const id = btn.closest(".member-row").dataset.id;
+  state.members = state.members.filter(m => m.id !== id);
+  state.bills.forEach(b => {
+    b.participants = b.participants.filter(x => x !== id);
+    if(b.payer === id) b.payer = "";
+  });
+  state.meters.forEach(mt => {
+    mt.participants = mt.participants.filter(x => x !== id);
+    if(mt.payer === id) mt.payer = "";
+  });
+  save(); renderAll();
+});
+
+document.getElementById("btn-add-member").onclick = () => {
+  state.members.push({ id: uid(), name: "租客" + (state.members.length + 1), weight: 1 });
+  save(); renderAll();
+};
+
+function wireToggleChips(box){
+  box.addEventListener("click", e => {
+    const chip = e.target.closest("[data-act-toggle]"); if(!chip) return;
+    const id = chip.getAttribute("data-act-toggle");
+    const item = chip.closest(".item"); if(!item) return;
+    const bid = item.dataset.id;
+    const b = state.bills.find(x => x.id === bid) || state.meters.find(x => x.id === bid);
+    if(!b) return;
+    b.participants = b.participants.includes(id)
+      ? b.participants.filter(x => x !== id)
+      : b.participants.concat(id);
+    save(); renderAll();
+  });
+}
+
+/* 账单 */
+document.getElementById("btn-add-bill").onclick = () => {
+  state.bills.push({ id: uid(), name: "", amount: 0, mode: "equal", shares: {},
+    payer: "", participants: state.members.map(m => m.id) });
+  save(); renderAll();
+};
+const billsBox = document.getElementById("bills");
+billsBox.addEventListener("input", e => {
+  const item = e.target.closest(".item"); if(!item) return;
+  const b = state.bills.find(x => x.id === item.dataset.id); if(!b) return;
+  const a = e.target.dataset.act;
+  if(a === "bill-name") b.name = e.target.value;
+  if(a === "bill-amount"){
+    b.amount = toCents(e.target.value);
+    const amt = item.querySelector(".amt"); if(amt) amt.textContent = fmt(b.amount || 0);
+  }
+  if(a === "bill-share") { b.shares = b.shares || {}; b.shares[e.target.dataset.mid] = toCents(e.target.value); }
+  save(); renderResult();
+});
+billsBox.addEventListener("change", e => {
+  const item = e.target.closest(".item"); if(!item) return;
+  const b = state.bills.find(x => x.id === item.dataset.id); if(!b) return;
+  const a = e.target.dataset.act;
+  if(a === "bill-mode") b.mode = e.target.value;
+  if(a === "bill-payer") b.payer = e.target.value;
+  save(); renderAll();
+});
+delegate(billsBox, btn => {
+  if(btn.dataset.act !== "bill-del") return;
+  state.bills = state.bills.filter(x => x.id !== btn.closest(".item").dataset.id);
+  save(); renderAll();
+});
+wireToggleChips(billsBox);
+
+/* 抄表 */
+document.getElementById("btn-add-meter").onclick = () => {
+  state.meters.push({ id: uid(), name: "", prev: null, curr: null, price: null,
+    mode: "equal", payer: "", participants: state.members.map(m => m.id) });
+  save(); renderAll();
+};
+const metersBox = document.getElementById("meters");
+metersBox.addEventListener("input", e => {
+  const item = e.target.closest(".item"); if(!item) return;
+  const mt = state.meters.find(x => x.id === item.dataset.id); if(!mt) return;
+  const a = e.target.dataset.act;
+  if(a === "meter-name") mt.name = e.target.value;
+  if(a === "meter-prev") mt.prev = e.target.value === "" ? null : parseFloat(e.target.value);
+  if(a === "meter-curr") mt.curr = e.target.value === "" ? null : parseFloat(e.target.value);
+  if(a === "meter-price") mt.price = e.target.value === "" ? null : parseFloat(e.target.value);
+  save();
+  if(a !== "meter-name"){
+    const abnormal = mt.prev != null && mt.curr != null && mt.curr < mt.prev;
+    const amount = Math.max(0, Math.round(((mt.curr || 0) - (mt.prev || 0)) * (mt.price || 0) * 100));
+    const amt = item.querySelector(".amt"); if(amt) amt.textContent = fmt(amount);
+    const warn = item.querySelector("[data-warn]"); if(warn) warn.hidden = !abnormal;
+    renderResult();
+  }
+});
+metersBox.addEventListener("change", e => {
+  const item = e.target.closest(".item"); if(!item) return;
+  const mt = state.meters.find(x => x.id === item.dataset.id); if(!mt) return;
+  if(e.target.dataset.act === "meter-mode") mt.mode = e.target.value;
+  if(e.target.dataset.act === "meter-payer") mt.payer = e.target.value;
+  save(); renderAll();
+});
+delegate(metersBox, btn => {
+  if(btn.dataset.act !== "meter-del") return;
+  state.meters = state.meters.filter(x => x.id !== btn.closest(".item").dataset.id);
+  save(); renderAll();
+});
+wireToggleChips(metersBox);
+
+/* 月份 */
+const monthInput = document.getElementById("month");
+monthInput.value = state.month;
+monthInput.addEventListener("change", () => { state.month = monthInput.value || nowMonth(); save(); });
+
+/* 复制文本 */
+document.getElementById("btn-copy").onclick = async () => {
+  const text = buildText();
+  try{ await navigator.clipboard.writeText(text); toast("已复制,去粘贴到群里吧 ✌️"); }
+  catch(e){
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); toast("已复制,去粘贴到群里吧 ✌️"); }
+    catch(err){ toast("复制失败,请手动选择文本"); }
+    ta.remove();
+  }
+};
+
+/* 历史与导入导出 */
+document.getElementById("btn-save").onclick = () => {
+  history[state.month] = JSON.parse(JSON.stringify(state));
+  save(); renderHistory(); toast(`已保存 ${state.month} 的账单 📦`);
+};
+document.getElementById("history").addEventListener("click", e => {
+  const btn = e.target.closest("[data-act]"); if(!btn) return;
+  const mo = btn.dataset.mo;
+  if(btn.dataset.act === "his-load"){
+    if(history[mo]){ state = JSON.parse(JSON.stringify(history[mo])); save();
+      monthInput.value = state.month; renderAll(); toast(`已载入 ${mo}`); }
+  }
+  if(btn.dataset.act === "his-del"){
+    delete history[mo]; save(); renderHistory();
+  }
+});
+document.getElementById("btn-export").onclick = () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `hezu-${state.month}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+};
+document.getElementById("btn-import").onclick = () => document.getElementById("file-import").click();
+document.getElementById("file-import").addEventListener("change", e => {
+  const f = e.target.files[0]; if(!f) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    try{
+      const data = JSON.parse(fr.result);
+      if(!data || !Array.isArray(data.members)) throw new Error("bad");
+      state = { month: data.month || nowMonth(), members: data.members,
+        bills: data.bills || [], meters: data.meters || [] };
+      save(); monthInput.value = state.month; renderAll(); toast("导入成功 ✅");
+    }catch(err){ toast("导入失败:文件格式不对"); }
+  };
+  fr.readAsText(f);
+  e.target.value = "";
+});
+document.getElementById("btn-clear").onclick = () => {
+  if(!confirm("确定清空本月的全部数据吗?(历史记录不受影响)")) return;
+  state = blankState(); state.month = monthInput.value || nowMonth();
+  save(); monthInput.value = state.month; renderAll(); toast("已清空");
+};
+
+/* ---------- 启动 ---------- */
+load();
+renderAll();
+</script>
+</body>
+</html>
