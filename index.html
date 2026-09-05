@@ -177,7 +177,7 @@
     <div id="meters"></div>
   </section>
 
-  <section id="sec-result">
+  <section id="sec-result" aria-live="polite">
     <h2>💰 <span id="t-h-result">结算结果</span> <span class="tag" id="total-tag"></span></h2>
     <div id="result"></div>
     <div style="margin-top:14px" class="row-between">
@@ -221,12 +221,12 @@
     <div id="modal-body" style="margin-top:10px"></div>
   </div>
 </div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 "use strict";
 /* 版本号单一来源:页脚与导出文件名统一引用 */
-const APP_VERSION = "2.5";
+const APP_VERSION = "2.6";
 /* ---------- 多语言 ---------- */
 const I18N = {
   zh: {
@@ -291,7 +291,7 @@ const I18N = {
     copied: "已复制,去粘贴到群里吧 ✌️", copyFail: "复制失败,请手动选择文本",
     shareNeedMembers: "先添加租客,再生成分享链接", shareCopied: "分享链接已复制,发给室友吧 🔗", copyFailShort: "复制失败",
     saved: "已保存 {m} 的账单 📦", loaded: "已载入 {m}", imported: "导入成功 ✅", importFail: "导入失败:文件格式不对",
-    cleared: "已清空", undo: "撤销", restored: "已恢复 ✅", sampleLoaded: "已载入示例数据,随便改 🎉",
+    cleared: "已清空", deleted: "已删除", undo: "撤销", restored: "已恢复 ✅", sampleLoaded: "已载入示例数据,随便改 🎉",
     memberDefault: "租客", saveFail: "保存失败:浏览器存储空间不足或被禁用",
     roomsTitle: "房间(可选)", addRoom: "＋ 添加房间",
     roomsHint: "给房间填租金并选好住客,账单的\"分摊方式\"里会出现\"按房间\",金额自动等于各人房间租金之和。",
@@ -374,7 +374,7 @@ const I18N = {
     copied: "Copied! Paste it into the group ✌️", copyFail: "Copy failed, please select the text manually",
     shareNeedMembers: "Add roommates before sharing", shareCopied: "Share link copied — send it to your roommates 🔗", copyFailShort: "Copy failed",
     saved: "Saved {m} 📦", loaded: "Loaded {m}", imported: "Imported ✅", importFail: "Import failed: bad file format",
-    cleared: "Cleared", undo: "Undo", restored: "Restored ✅", sampleLoaded: "Sample loaded — edit freely 🎉",
+    cleared: "Cleared", deleted: "Deleted", undo: "Undo", restored: "Restored ✅", sampleLoaded: "Sample loaded — edit freely 🎉",
     memberDefault: "Roommate", saveFail: "Save failed: browser storage is full or disabled",
     roomsTitle: "Rooms (optional)", addRoom: "＋ Add room",
     roomsHint: "Set each room's rent and occupant, then pick \"By room\" in a bill's split mode — the amount is the sum of room rents.",
@@ -874,6 +874,15 @@ function modeOptions(sel, withCustom){
   return opts.map(([v, label]) => `<option value="${v}" ${sel===v?"selected":""}>${label}</option>`).join("");
 }
 
+/* 删除类操作通用撤销:整状态快照 + toast 一键恢复 */
+function deleteWithUndo(mutate){
+  const snapshot = JSON.parse(JSON.stringify(state));
+  mutate();
+  save(); renderAll();
+  toast(t("deleted"), t("undo"), () => {
+    state = snapshot; save(); renderAll(); toast(t("restored"));
+  });
+}
 function updateDupWarn(){
   const dupEl = document.getElementById("dup-warn");
   if(!dupEl) return;
@@ -1252,17 +1261,18 @@ delegate(membersBox, btn => {
   if(btn.dataset.act === "sample"){ loadSample(); return; }
   if(btn.dataset.act !== "member-del") return;
   const id = btn.closest(".member-row").dataset.id;
-  state.members = state.members.filter(m => m.id !== id);
-  state.bills.forEach(b => {
-    b.participants = b.participants.filter(x => x !== id);
-    if(b.payer === id) b.payer = "";
+  deleteWithUndo(() => {
+    state.members = state.members.filter(m => m.id !== id);
+    state.bills.forEach(b => {
+      b.participants = b.participants.filter(x => x !== id);
+      if(b.payer === id) b.payer = "";
+    });
+    state.meters.forEach(mt => {
+      mt.participants = mt.participants.filter(x => x !== id);
+      if(mt.payer === id) mt.payer = "";
+    });
+    (state.rooms || []).forEach(r => { if(r.occupantId === id) r.occupantId = ""; });
   });
-  state.meters.forEach(mt => {
-    mt.participants = mt.participants.filter(x => x !== id);
-    if(mt.payer === id) mt.payer = "";
-  });
-  (state.rooms || []).forEach(r => { if(r.occupantId === id) r.occupantId = ""; });
-  save(); renderAll();
 });
 
 document.getElementById("btn-add-member").onclick = () => {
@@ -1314,8 +1324,8 @@ roomsBox.addEventListener("change", e => {
 });
 delegate(roomsBox, btn => {
   if(btn.dataset.act !== "room-del") return;
-  state.rooms = (state.rooms || []).filter(x => x.id !== btn.closest(".room-row").dataset.id);
-  save(); renderAll();
+  const id = btn.closest(".room-row").dataset.id;
+  deleteWithUndo(() => { state.rooms = (state.rooms || []).filter(x => x.id !== id); });
 });
 
 function wireToggleChips(box){
@@ -1379,8 +1389,8 @@ billsBox.addEventListener("change", e => {
 });
 delegate(billsBox, btn => {
   if(btn.dataset.act !== "bill-del") return;
-  state.bills = state.bills.filter(x => x.id !== btn.closest(".item").dataset.id);
-  save(); renderAll();
+  const id = btn.closest(".item").dataset.id;
+  deleteWithUndo(() => { state.bills = state.bills.filter(x => x.id !== id); });
 });
 wireToggleChips(billsBox);
 
@@ -1417,8 +1427,8 @@ metersBox.addEventListener("change", e => {
 });
 delegate(metersBox, btn => {
   if(btn.dataset.act !== "meter-del") return;
-  state.meters = state.meters.filter(x => x.id !== btn.closest(".item").dataset.id);
-  save(); renderAll();
+  const id = btn.closest(".item").dataset.id;
+  deleteWithUndo(() => { state.meters = state.meters.filter(x => x.id !== id); });
 });
 wireToggleChips(metersBox);
 
@@ -1678,7 +1688,9 @@ document.getElementById("history").addEventListener("click", e => {
       t("undo"), () => { state = snapshot; save(); renderAll(); toast(t("restored")); });
   }
   if(btn.dataset.act === "his-del"){
+    const entry = history[mo];
     delete history[mo]; save(); renderAll();
+    toast(t("deleted"), t("undo"), () => { history[mo] = entry; save(); renderAll(); toast(t("restored")); });
   }
 });
 document.getElementById("btn-export").onclick = () => {
