@@ -30,7 +30,9 @@
 - 🔗 **分享链接**:整份账单编码进网址,发给室友,对方打开即见同样的账单,无需注册、无需服务器
 - 📋 **一键复制**结果为纯文本,粘贴到群里即可;🖨️ **打印/存 PDF** 留档
 - 🌙 **深色模式**:跟随系统自动切换;📱 手机、平板、电脑自适应
-- 🗄️ **按月保存历史**、导出 / 导入 JSON
+- 🗄️ **按月保存历史** + 📈 **月度支出趋势图**、导出 / 导入 JSON
+- ↩️ **误操作保护**:清空本月可一键撤销;⌨️ 账单名称根据历史输入自动补全
+- 📲 **PWA**:支持"添加到主屏幕",安装后**离线可用**(Service Worker 缓存)
 - 🎁 **示例数据**:首次打开点一下"载入示例数据",秒懂用法
 - 🔒 **隐私友好**:纯前端单文件应用,无后端、无登录、无追踪,所有数据只存在你自己的浏览器 `localStorage` 里
 
@@ -46,14 +48,19 @@
 
 ## 技术说明
 
-- 纯原生 HTML/CSS/JavaScript,单文件 `index.html`,零依赖、零构建
+- 纯原生 HTML/CSS/JavaScript,核心是单文件 `index.html`,零依赖、零构建
 - 金额全部以"分"为单位计算,均摊余数与按权重分摊采用最大余数法,保证每人金额合计 === 总额
 - 转账方案采用贪心结算(欠款最多的人优先收款),生成的转账笔数接近最少
 - 分享链接把账单状态压缩编码进 URL hash(`#d=...`),不经过任何服务器
+- PWA 图标由 `tools/gen-icons.js` 纯 Node 程序化生成(手写 PNG 编码器,无图像库依赖)
 
 ## 本地运行
 
-无需任何环境,直接用浏览器打开 `index.html` 即可。
+无需任何环境,直接用浏览器打开 `index.html` 即可;要体验离线安装(PWA),通过任意静态服务器或 GitHub Pages 访问。
+
+## English
+
+**HeZu** is a tiny, dependency-free bill splitter for shared apartments (co-renting). Split rent by room weight, split utility bills by meter readings, record who paid upfront, and get minimal transfer instructions ("B pays A ¥xx") — all in a single-file, offline-capable web app. Your data never leaves your browser. Open the [live demo](https://qlw088697-ui.github.io/hezu/), click "载入示例数据" to load a sample, and start splitting.
 
 ## License
 
