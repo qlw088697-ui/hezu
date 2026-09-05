@@ -264,8 +264,9 @@ function computeAll(){
     if(c.balance < 1e-9) j++;
   }
   const total = expenses.reduce((s,e) => s + e.amount, 0);
+  const unpaid = expenses.filter(e => !e.payer || !memberById(e.payer)).reduce((s,e) => s + e.amount, 0);
   const hasAbnormal = state.meters.some(mt => mt.curr < mt.prev);
-  return { expenses, per, transfers, total, hasAbnormal };
+  return { expenses, per, transfers, total, unpaid, hasAbnormal };
 }
 
 /* ---------- 渲染 ---------- */
@@ -377,8 +378,11 @@ function renderResult(){
       <div class="transfer">🧑 ${esc(t.from.name)} <span class="arrow">→</span> ${esc(t.to.name)}
         <span class="v">${fmt(t.amount)}</span></div>`).join("");
   }else{
-    html += `<div class="empty" style="padding:10px 0">✅ 账目已两清,无需转账</div>`;
+    html += r.unpaid > 0
+      ? `<div class="empty" style="padding:10px 0">组内无需互相转账</div>`
+      : `<div class="empty" style="padding:10px 0">✅ 账目已两清,无需转账</div>`;
   }
+  if(r.unpaid > 0) html += `<div class="hint" style="color:var(--warn)">⚠️ 有 ${fmt(r.unpaid)} 的支出没有填垫付人,这部分金额不会出现在转账方案里(请自行缴纳或补填垫付人)</div>`;
   if(r.hasAbnormal) html += `<div class="hint" style="color:var(--warn)">⚠️ 有抄表项本期读数小于上期,请检查后重新计算</div>`;
   box.innerHTML = html;
   document.getElementById("settle-hint").textContent =
