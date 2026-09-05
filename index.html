@@ -420,6 +420,8 @@ function renderHistory(){
 }
 
 /* ---------- 事件 ---------- */
+load(); // 必须在任何访问 state 的绑定代码之前执行
+
 function delegate(root, fn){
   root.addEventListener("click", e => {
     const btn = e.target.closest("[data-act]");
@@ -605,7 +607,6 @@ document.getElementById("btn-clear").onclick = () => {
 };
 
 /* ---------- 启动 ---------- */
-load();
 renderAll();
 </script>
 </body>
