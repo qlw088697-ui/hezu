@@ -1,5 +1,5 @@
 /* 合租账本 Service Worker:导航请求网络优先(保证更新及时),静态资源缓存优先(离线可用) */
-const CACHE = "hezu-v2.7";
+const CACHE = "hezu-v2.8";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {

@@ -226,7 +226,7 @@
 <script>
 "use strict";
 /* 版本号单一来源:页脚与导出文件名统一引用 */
-const APP_VERSION = "2.7";
+const APP_VERSION = "2.8";
 /* ---------- 多语言 ---------- */
 const I18N = {
   zh: {
@@ -283,6 +283,7 @@ const I18N = {
     backupBtn: "⬇️ 全量备份", backupDone: "全量备份已下载 💾",
     importBackupConfirm: "该文件是全量备份,包含 {n} 个月的历史。导入将覆盖当前账单和全部历史,继续吗?",
     restoredAll: "已恢复全部数据(含 {n} 个月历史)✅",
+    importOverwriteConfirm: "导入将覆盖本月正在编辑的内容(成员/账单/抄表),继续吗?",
     updateReady: "检测到新版本,刷新页面即可更新 🔄",
     dupNamesWarn: "⚠️ 有 {n} 个重名成员({names}),会影响历史匹配与累计统计,建议改名",
     backupRemind: "历史数据已超过一个月未备份,记得「⬇️ 全量备份」保存 💾",
@@ -366,6 +367,7 @@ const I18N = {
     backupBtn: "⬇️ Full backup", backupDone: "Full backup downloaded 💾",
     importBackupConfirm: "This file is a full backup with {n} months of history. Importing will overwrite the current bill and ALL history. Continue?",
     restoredAll: "Everything restored (including {n} months of history) ✅",
+    importOverwriteConfirm: "Importing will overwrite this month's content (members/bills/meters). Continue?",
     updateReady: "New version ready — refresh to update 🔄",
     dupNamesWarn: "⚠️ {n} duplicate name(s) ({names}) — rename to keep history matching accurate",
     backupRemind: "History hasn't been backed up for over a month — consider a full backup 💾",
@@ -811,8 +813,17 @@ function renderAggregate(){
     </tbody></table></details>`;
 }
 
+/* 无障碍:.field 内的 label 与控件程序化关联 */
+function labelize(){
+  document.querySelectorAll(".field").forEach(f => {
+    const label = f.querySelector("label");
+    const ctrl = f.querySelector("input,select,textarea");
+    if(label && ctrl) ctrl.setAttribute("aria-label", label.textContent.trim());
+  });
+}
 function renderAll(){
   renderStatic(); renderMembers(); renderRooms(); renderBills(); renderMeters(); renderResult(); renderHistory(); renderTrend(); renderAggregate(); renderDatalist();
+  labelize();
   const pi = document.getElementById("period-label");
   if(pi && document.activeElement !== pi) pi.value = state.periodLabel || "";
 }
@@ -1021,6 +1032,7 @@ function renderResult(){
   if(r.hasAbnormal) html += `<div class="hint" style="color:var(--warn)">${t("abnormalWarn")}</div>`;
   box.innerHTML = html;
   document.getElementById("settle-hint").textContent =
+    (state.periodLabel ? state.periodLabel + " · " : "") +
     t("settleHint").replace("{e}", r.expenses.length).replace("{b}", state.bills.length).replace("{m}", state.meters.length);
 }
 
@@ -1725,8 +1737,13 @@ document.getElementById("file-import").addEventListener("change", e => {
         save(); monthInput.value = state.month; renderAll(); toast(t("restoredAll").replace("{n}", n));
         return;
       }
+      const hasCurrent = state.members.length || state.bills.length || state.meters.length;
+      if(hasCurrent && !confirm(t("importOverwriteConfirm"))) return;
       state = sanitizeState(data, state.month);
-      save(); monthInput.value = state.month; renderAll(); toast(t("imported"));
+      save(); monthInput.value = state.month;
+      const pi = document.getElementById("period-label");
+      if(pi) pi.value = state.periodLabel || "";
+      renderAll(); toast(t("imported"));
     }catch(err){ toast(t("importFail")); }
   };
   fr.readAsText(f);
