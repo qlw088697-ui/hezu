@@ -22,7 +22,7 @@ function makeApi(initState){
     return {
       setState: (s) => { state = s; },
       fmt, splitEqual, splitWeight, expenseOfBill, expenseOfMeter, computeAll,
-      roomRentOf, sanitizeState, settlementCsv, copyBillsFromMonth,
+      roomRentOf, sanitizeState, settlementCsv, copyBillsFromMonth, parseBackup,
     };`);
 }
 const sampleState = {
@@ -163,6 +163,23 @@ const copied2 = api.copyBillsFromMonth(
   { members: [{ id: "z", name: "陌生产" }], bills: [], meters: [{ name: "水费", prev: 10, curr: 20, price: 3, mode: "equal", payer: "", participants: ["z"] }] },
   { month: "2026-09", members: [{ id: "d1", name: "李四" }], bills: [], meters: [] });
 assert(copied2.meters[0].participants.length === 1 && copied2.meters[0].participants[0] === "d1", "无匹配时抄表参与人回退为全部成员");
+
+/* 全量备份信封解析 */
+const goodBackup = {
+  app: "hezu", version: 1, exportedAt: "2026-09-05T00:00:00Z",
+  current: { month: "2026-09", members: [{ id: "a", name: "张三", weight: 1 }], bills: [{ amount: "junk", participants: "notarray" }], meters: [], rooms: [] },
+  history: {
+    "2026-08": { month: "2026-08", members: [{ id: "b", name: "李四", weight: 1 }], bills: [], meters: [] },
+    "bad-key": { members: [] },
+  },
+};
+const parsed = api.parseBackup(goodBackup);
+assert(parsed !== null, "合法备份信封被识别");
+assert(parsed.current.members[0].name === "张三" && parsed.current.bills[0].amount === 0, "备份 current 被消毒(畸形金额归零)");
+assert(Object.keys(parsed.history).length === 1 && parsed.history["2026-08"].members[0].name === "李四", "历史按月份键消毒,非法键丢弃");
+assert(api.parseBackup({ members: [] }) === null, "非备份 JSON 返回 null(走单月导入)");
+assert(api.parseBackup({ app: "hezu", current: {}, history: [] }) === null, "history 为数组时拒绝");
+assert(api.parseBackup(null) === null, "空数据拒绝");
 
 /* 3) 分享链接编解码往返 */
 const shareSeg = script.split("/* ---------- 示例数据 ---------- */")[1].split("/* ---------- 事件 ---------- */")[0];

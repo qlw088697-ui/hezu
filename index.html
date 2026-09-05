@@ -161,6 +161,7 @@
       <span class="hint grow" id="settle-hint"></span>
       <button class="ghost" id="btn-copy">📋 复制为文本(发群里)</button>
       <button class="ghost" id="btn-share">🔗 复制分享链接</button>
+      <button class="ghost" id="btn-native-share" hidden>📤 分享到…</button>
       <button class="ghost" id="btn-image">🖼️ 存为图片</button>
       <button class="ghost" id="btn-print">🖨️ 打印 / 存 PDF</button>
     </div>
@@ -172,6 +173,7 @@
     <div class="row-between" style="margin-top:10px">
     <button class="primary" id="btn-save">保存本月到历史</button>
     <span class="grow"></span>
+    <button id="btn-backup">⬇️ 全量备份</button>
     <button id="btn-csv">📊 导出结算 CSV</button>
     <button id="btn-export">导出 JSON</button>
       <button id="btn-import">导入 JSON</button>
@@ -233,6 +235,10 @@ const I18N = {
     copyBtn: "复制账单",
     copyConfirm: "将 {m} 的账单和抄表结构复制到本月吗?本月现有的账单和抄表会被覆盖(成员按名字匹配,复制后可撤销)。",
     copyDone: "已从 {m} 复制 {b} 笔账单、{t} 项抄表,请核对本读数",
+    backupBtn: "⬇️ 全量备份", backupDone: "全量备份已下载 💾",
+    importBackupConfirm: "该文件是全量备份,包含 {n} 个月的历史。导入将覆盖当前账单和全部历史,继续吗?",
+    restoredAll: "已恢复全部数据(含 {n} 个月历史)✅",
+    nativeShareBtn: "📤 分享到…",
     emptyHistory: "暂无历史月份,点\"保存本月到历史\"留存一份",
     copied: "已复制,去粘贴到群里吧 ✌️", copyFail: "复制失败,请手动选择文本",
     shareNeedMembers: "先添加租客,再生成分享链接", shareCopied: "分享链接已复制,发给室友吧 🔗", copyFailShort: "复制失败",
@@ -256,7 +262,7 @@ const I18N = {
     copyTransfers: "转账", copyTotal: "合计", copyBy: "由「合租账本 HeZu」计算",
     sampleN1: "张三(主卧)", sampleN2: "李四(次卧)", sampleN3: "王五(小卧)",
     sampleB1: "房租", sampleB2: "宽带网费", sampleB3: "清洁用品", sampleM1: "电费", sampleM2: "水费",
-    footer: "HeZu v1.6 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器",
+    footer: "HeZu v1.7 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器",
   },
   en: {
     appTitle: "HeZu Rent Split",
@@ -299,6 +305,10 @@ const I18N = {
     copyBtn: "Copy bills",
     copyConfirm: "Copy {m}'s bills and meter structure into this month? Current bills/meters will be overwritten (members matched by name; you can undo).",
     copyDone: "Copied {b} bills and {t} meters from {m} — please update the current readings",
+    backupBtn: "⬇️ Full backup", backupDone: "Full backup downloaded 💾",
+    importBackupConfirm: "This file is a full backup with {n} months of history. Importing will overwrite the current bill and ALL history. Continue?",
+    restoredAll: "Everything restored (including {n} months of history) ✅",
+    nativeShareBtn: "📤 Share…",
     emptyHistory: "No saved months yet — click \"Save this month\" to keep one",
     copied: "Copied! Paste it into the group ✌️", copyFail: "Copy failed, please select the text manually",
     shareNeedMembers: "Add roommates before sharing", shareCopied: "Share link copied — send it to your roommates 🔗", copyFailShort: "Copy failed",
@@ -322,7 +332,7 @@ const I18N = {
     copyTransfers: "Transfers", copyTotal: "Total", copyBy: "computed by HeZu",
     sampleN1: "Zhang (Master)", sampleN2: "Li (Middle)", sampleN3: "Wang (Small)",
     sampleB1: "Rent", sampleB2: "Broadband", sampleB3: "Supplies", sampleM1: "Power", sampleM2: "Water",
-    footer: "HeZu v1.6 · MIT · A single-file app. All data stays in your browser",
+    footer: "HeZu v1.7 · MIT · A single-file app. All data stays in your browser",
   },
 };
 let lang = "zh";
@@ -558,6 +568,17 @@ function settlementCsv(){
   }
   return lines.join("\r\n");
 }
+/* 全量备份信封解析:识别 {app:"hezu", current, history} 并整体消毒;非备份文件返回 null */
+function parseBackup(data){
+  if(!data || typeof data !== "object" || Array.isArray(data)) return null;
+  if(data.app !== "hezu" || !data.history || typeof data.history !== "object" || Array.isArray(data.history)) return null;
+  const history = {};
+  Object.keys(data.history).slice(0, 120).forEach(mo => {
+    if(!/^\d{4}-\d{2}$/.test(mo)) return;
+    history[mo] = sanitizeState(data.history[mo], mo);
+  });
+  return { current: sanitizeState(data.current, data.current && data.current.month), history };
+}
 /* 把历史月份的账单/抄表复制到本月:成员按名字匹配,抄表上期读数自动衔接上月本期读数 */
 function copyBillsFromMonth(src, dst){
   src = src && typeof src === "object" ? src : {};
@@ -609,8 +630,9 @@ function renderStatic(){
   set("t-h-bills", "billsTitle"); set("btn-add-bill", "addBill");
   set("t-h-meters", "metersTitle"); set("btn-add-meter", "addMeter"); set("t-hint-meters", "metersHint");
   set("t-h-result", "resultTitle");
-  set("btn-copy", "copyText"); set("btn-share", "copyShare"); set("btn-image", "imageBtn"); set("btn-print", "printBtn");
-  set("btn-csv", "csvBtn");
+  set("btn-copy", "copyText"); set("btn-share", "copyShare"); set("btn-native-share", "nativeShareBtn");
+  set("btn-image", "imageBtn"); set("btn-print", "printBtn");
+  set("btn-csv", "csvBtn"); set("btn-backup", "backupBtn");
   set("t-h-tools", "toolsTitle");
   set("btn-save", "saveMonth"); set("btn-export", "exportJson"); set("btn-import", "importJson"); set("btn-clear", "clearMonth");
   set("t-footer", "footer");
@@ -1254,6 +1276,33 @@ document.getElementById("btn-csv").onclick = () => {
     toast(t("csvSaved"));
   }catch(e){ toast(t("copyFailShort")); }
 };
+/* 全量备份:当前月份 + 全部历史 */
+document.getElementById("btn-backup").onclick = () => {
+  try{
+    const payload = { app: "hezu", version: 1, exportedAt: new Date().toISOString(),
+      current: JSON.parse(JSON.stringify(state)), history: JSON.parse(JSON.stringify(history)) };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "hezu-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast(t("backupDone"));
+  }catch(e){ toast(t("copyFailShort")); }
+};
+/* 原生分享(Web Share API,移动端可用;桌面自动隐藏) */
+const nativeShareBtn = document.getElementById("btn-native-share");
+if(navigator.share){
+  nativeShareBtn.hidden = false;
+  nativeShareBtn.onclick = async () => {
+    if(!state.members.length){ toast(t("shareNeedMembers")); return; }
+    try{
+      await navigator.share({ title: t("appTitle") + " " + state.month, text: buildText() });
+    }catch(e){
+      if(e && e.name !== "AbortError") toast(t("copyFailShort"));
+    }
+  };
+}
 
 /* 历史与导入导出 */
 document.getElementById("btn-save").onclick = () => {
@@ -1296,6 +1345,14 @@ document.getElementById("file-import").addEventListener("change", e => {
     try{
       const data = JSON.parse(fr.result);
       if(!data || typeof data !== "object") throw new Error("bad");
+      const backup = parseBackup(data);
+      if(backup){
+        const n = Object.keys(backup.history).length;
+        if(!confirm(t("importBackupConfirm").replace("{n}", n))) return;
+        state = backup.current; history = backup.history;
+        save(); monthInput.value = state.month; renderAll(); toast(t("restoredAll").replace("{n}", n));
+        return;
+      }
       state = sanitizeState(data, state.month);
       save(); monthInput.value = state.month; renderAll(); toast(t("imported"));
     }catch(err){ toast(t("importFail")); }
