@@ -153,7 +153,9 @@
 
   <section id="sec-bills">
     <h2>🧾 <span id="t-h-bills">账单项(房租、网络、清洁用品…)</span><span class="grow"></span>
+      <button class="mini" id="btn-csv-bills">📥 导入 CSV</button>
       <button class="primary mini" id="btn-add-bill">＋ 添加账单</button></h2>
+  <input type="file" id="file-csv-bills" accept=".csv,.txt,text/csv,text/plain" hidden>
     <div id="bills"></div>
   </section>
 
@@ -246,6 +248,11 @@ const I18N = {
     copyText: "📋 复制为文本(发群里)", copyShare: "🔗 复制分享链接", printBtn: "🖨️ 打印 / 存 PDF",
     imageBtn: "🖼️ 存为图片", imageSaved: "图片已生成并下载 🖼️",
     csvBtn: "📊 导出结算 CSV", csvSaved: "CSV 已导出 📊",
+    importCsvBills: "📥 导入 CSV",
+    csvBillsConfirm: "将导入 {n} 笔账单(如:{names}…),按均摊给全部成员,之后可逐笔调整。跳过 {s} 行无效数据。继续吗?",
+    csvBillsDone: "已导入 {n} 笔账单,可继续调整分摊方式 ✅",
+    csvBillsFail: "CSV 解析失败:文件需有包含\"名称\"和\"金额\"的表头行",
+    csvBillsEmpty: "没有可导入的账单行",
     settleHint: "共 {e} 笔支出 · {b} 笔账单 + {m} 项抄表",
     toolsTitle: "保存与记录", saveMonth: "保存本月到历史",
     exportJson: "导出 JSON", importJson: "导入 JSON", clearMonth: "清空本月",
@@ -285,7 +292,7 @@ const I18N = {
     copyTransfers: "转账", copyTotal: "合计", copyBy: "由「合租账本 HeZu」计算",
     sampleN1: "张三(主卧)", sampleN2: "李四(次卧)", sampleN3: "王五(小卧)",
     sampleB1: "房租", sampleB2: "宽带网费", sampleB3: "清洁用品", sampleM1: "电费", sampleM2: "水费",
-    footer: "HeZu v1.9 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器",
+    footer: "HeZu v2.0 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器",
   },
   en: {
     appTitle: "HeZu Rent Split",
@@ -320,6 +327,11 @@ const I18N = {
     copyText: "📋 Copy as text (for group chat)", copyShare: "🔗 Copy share link", printBtn: "🖨️ Print / Save PDF",
     imageBtn: "🖼️ Save as image", imageSaved: "Image generated and downloaded 🖼️",
     csvBtn: "📊 Export settlement CSV", csvSaved: "CSV exported 📊",
+    importCsvBills: "📥 Import CSV",
+    csvBillsConfirm: "Import {n} bills (e.g. {names}…) split equally among all members — adjust afterwards. {s} invalid rows skipped. Continue?",
+    csvBillsDone: "Imported {n} bills — adjust split modes as needed ✅",
+    csvBillsFail: "CSV parsing failed: the file needs a header row with \"Name\" and \"Amount\" columns",
+    csvBillsEmpty: "No importable bill rows",
     settleHint: "{e} expenses · {b} bills + {m} meters",
     toolsTitle: "Save & records", saveMonth: "Save this month",
     exportJson: "Export JSON", importJson: "Import JSON", clearMonth: "Clear month",
@@ -359,7 +371,7 @@ const I18N = {
     copyTransfers: "Transfers", copyTotal: "Total", copyBy: "computed by HeZu",
     sampleN1: "Zhang (Master)", sampleN2: "Li (Middle)", sampleN3: "Wang (Small)",
     sampleB1: "Rent", sampleB2: "Broadband", sampleB3: "Supplies", sampleM1: "Power", sampleM2: "Water",
-    footer: "HeZu v1.9 · MIT · A single-file app. All data stays in your browser",
+    footer: "HeZu v2.0 · MIT · A single-file app. All data stays in your browser",
   },
 };
 let lang = "zh";
@@ -634,6 +646,51 @@ function parseBackup(data){
   });
   return { current: sanitizeState(data.current, data.current && data.current.month), history };
 }
+/* CSV 解析:支持引号包裹字段(逗号/换行在引号内不切分) */
+function parseCsv(text){
+  const rows = [];
+  let row = [], field = "", inQ = false;
+  for(let i = 0; i < text.length; i++){
+    const c = text[i];
+    if(inQ){
+      if(c === '"'){ if(text[i + 1] === '"'){ field += '"'; i++; } else inQ = false; }
+      else field += c;
+    }else if(c === '"'){ inQ = true; }
+    else if(c === ","){ row.push(field); field = ""; }
+    else if(c === "\n" || c === "\r"){
+      if(c === "\r" && text[i + 1] === "\n") i++;
+      row.push(field); field = "";
+      if(row.length > 1 || row[0] !== "") rows.push(row);
+      row = [];
+    }else field += c;
+  }
+  row.push(field);
+  if(row.length > 1 || row[0] !== "") rows.push(row);
+  return rows;
+}
+/* 从 CSV 文本提取账单(名称 + 金额 两列表头,自动跳过无效行) */
+function billsFromCsv(text){
+  const rows = parseCsv(String(text || ""));
+  if(!rows.length) return { error: "empty" };
+  let header = -1, nameIdx = -1, amtIdx = -1;
+  for(let i = 0; i < Math.min(rows.length, 10); i++){
+    const lower = rows[i].map(c => String(c == null ? "" : c).trim().toLowerCase());
+    const ni = lower.findIndex(c => /^(名称|名目|项目|摘要|事由|品名|name|item|title)$/.test(c));
+    const ai = lower.findIndex(c => /^(金额|数额|费用|总价|amount|cost|price)$/.test(c));
+    if(ni >= 0 && ai >= 0){ header = i; nameIdx = ni; amtIdx = ai; break; }
+  }
+  if(header < 0) return { error: "noHeader" };
+  const bills = [];
+  let skipped = 0;
+  rows.slice(header + 1).forEach(r => {
+    const name = String(r[nameIdx] == null ? "" : r[nameIdx]).trim().slice(0, 40);
+    const amt = Math.round(parseFloat(String(r[amtIdx] == null ? "" : r[amtIdx]).replace(/[¥￥$€,\s]/g, "")) * 100);
+    if(!name && !r[amtIdx]) return;               // 纯空行
+    if(!name || !isFinite(amt) || amt <= 0){ skipped++; return; }
+    bills.push({ name, amount: Math.min(amt, 1e9) });
+  });
+  return { bills: bills.slice(0, 100), skipped };
+}
 /* 把历史月份的账单/抄表复制到本月:成员按名字匹配,抄表上期读数自动衔接上月本期读数 */
 function copyBillsFromMonth(src, dst){
   src = src && typeof src === "object" ? src : {};
@@ -682,7 +739,7 @@ function renderStatic(){
   set("t-h-members", "membersTitle"); set("btn-add-member", "addMember"); set("btn-batch-member", "batchBtn"); set("t-hint-members", "membersHint");
   set("t-h-rooms", "roomsTitle"); set("btn-add-room", "addRoom"); set("t-hint-rooms", "roomsHint");
   set("t-hint-tools", "dataHint");
-  set("t-h-bills", "billsTitle"); set("btn-add-bill", "addBill");
+  set("t-h-bills", "billsTitle"); set("btn-add-bill", "addBill"); set("btn-csv-bills", "importCsvBills");
   set("t-h-meters", "metersTitle"); set("btn-add-meter", "addMeter"); set("t-hint-meters", "metersHint");
   set("t-h-result", "resultTitle");
   set("btn-copy", "copyText"); set("btn-share", "copyShare"); set("btn-native-share", "nativeShareBtn");
@@ -1287,8 +1344,8 @@ function roundRect(ctx, x, y, w, h, r){
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
 }
-function exportImage(){
-  if(!state.members.length){ toast(t("shareNeedMembers")); return; }
+function buildImageCanvas(){
+  if(!state.members.length) return null;
   const r = computeAll();
   const S = 2, W = 640;
   const rowH = 62;
@@ -1298,7 +1355,7 @@ function exportImage(){
   const cv = document.createElement("canvas");
   cv.width = W * S; cv.height = H * S;
   const ctx = cv.getContext("2d");
-  if(!ctx){ toast(t("copyFailShort")); return; }
+  if(!ctx) return null;
   ctx.scale(S, S);
   const F = "'PingFang SC','Hiragino Sans GB','Microsoft YaHei',system-ui,-apple-system,sans-serif";
   // 背景 + 渐变页眉
@@ -1362,8 +1419,16 @@ function exportImage(){
   ctx.textAlign = "center"; ctx.fillStyle = "#9aa3b8";
   ctx.font = "400 14px " + F;
   ctx.fillText(t("copyBy"), W / 2, H - 20);
-  // 下载
-  cv.toBlob(blob => {
+  return cv;
+}
+function canvasToBlob(cv){
+  return new Promise(resolve => cv.toBlob(resolve, "image/png"));
+}
+async function exportImage(){
+  const cv = buildImageCanvas();
+  if(!cv){ toast(t("shareNeedMembers")); return; }
+  try{
+    const blob = await canvasToBlob(cv);
     if(!blob){ toast(t("copyFailShort")); return; }
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -1371,11 +1436,10 @@ function exportImage(){
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     toast(t("imageSaved"));
-  }, "image/png");
+  }catch(e){ toast(t("copyFailShort")); }
 }
 document.getElementById("btn-image").onclick = () => {
-  try{ exportImage(); }
-  catch(e){ toast(t("copyFailShort")); }
+  exportImage().catch(() => toast(t("copyFailShort")));
 };
 document.getElementById("btn-csv").onclick = () => {
   if(!state.members.length){ toast(t("shareNeedMembers")); return; }
@@ -1403,19 +1467,54 @@ document.getElementById("btn-backup").onclick = () => {
     toast(t("backupDone"));
   }catch(e){ toast(t("copyFailShort")); }
 };
-/* 原生分享(Web Share API,移动端可用;桌面自动隐藏) */
+/* 原生分享(Web Share API,移动端可用;桌面自动隐藏)——优先带结算图片 */
 const nativeShareBtn = document.getElementById("btn-native-share");
 if(navigator.share){
   nativeShareBtn.hidden = false;
   nativeShareBtn.onclick = async () => {
     if(!state.members.length){ toast(t("shareNeedMembers")); return; }
     try{
-      await navigator.share({ title: t("appTitle") + " " + state.month, text: buildText() });
+      const payload = { title: t("appTitle") + " " + state.month, text: buildText() };
+      try{
+        const testFile = new File([new Blob(["x"])], "t.png", { type: "image/png" });
+        if(navigator.canShare && navigator.canShare({ files: [testFile] })){
+          const cv = buildImageCanvas();
+          const blob = cv && await canvasToBlob(cv);
+          if(blob){
+            const file = new File([blob], "hezu-" + state.month + ".png", { type: "image/png" });
+            if(navigator.canShare({ files: [file] })) payload.files = [file];
+          }
+        }
+      }catch(e2){ /* 图片生成失败则退回纯文本分享 */ }
+      await navigator.share(payload);
     }catch(e){
       if(e && e.name !== "AbortError") toast(t("copyFailShort"));
     }
   };
 }
+/* 从 CSV 导入账单(名称 + 金额 两列;自动识别 UTF-8/GBK 编码) */
+document.getElementById("btn-csv-bills").onclick = () => document.getElementById("file-csv-bills").click();
+document.getElementById("file-csv-bills").addEventListener("change", async e => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if(!f) return;
+  let text;
+  try{
+    const buf = await f.arrayBuffer();
+    try{ text = new TextDecoder("utf-8", { fatal: true }).decode(buf); }
+    catch(err){ text = new TextDecoder("gbk").decode(buf); }
+  }catch(err){ toast(t("importFail")); return; }
+  const parsed = billsFromCsv(text);
+  if(parsed.error){ toast(t("csvBillsFail")); return; }
+  if(!parsed.bills.length){ toast(t("csvBillsEmpty")); return; }
+  if(!state.members.length){ toast(t("shareNeedMembers")); return; }
+  const samples = parsed.bills.slice(0, 3).map(b => b.name).join(lang === "zh" ? "、" : ", ");
+  if(!confirm(t("csvBillsConfirm").replace("{n}", parsed.bills.length).replace("{names}", samples).replace("{s}", parsed.skipped))) return;
+  parsed.bills.forEach(b => state.bills.push({ id: uid(), name: b.name, amount: b.amount,
+    mode: "equal", shares: {}, payer: "", participants: state.members.map(m => m.id) }));
+  save(); renderAll();
+  toast(t("csvBillsDone").replace("{n}", parsed.bills.length));
+});
 
 /* 历史与导入导出 */
 document.getElementById("btn-save").onclick = () => {

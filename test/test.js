@@ -23,6 +23,7 @@ function makeApi(initState){
       setState: (s) => { state = s; },
       fmt, splitEqual, splitWeight, expenseOfBill, expenseOfMeter, computeAll,
       roomRentOf, sanitizeState, settlementCsv, copyBillsFromMonth, parseBackup, computeAllFor,
+      parseCsv, billsFromCsv,
     };`);
 }
 const sampleState = {
@@ -194,6 +195,22 @@ assert(rAlt.total === 9000 && rAlt.per[0].owed === 9000, "computeAllFor 对快�
 assert(api.computeAll().total === 315000, "computeAllFor 不影响当前状态(仍为原账单)");
 const rAgain = api.computeAllFor(altState);
 assert(rAgain.total === 9000, "computeAllFor 可重复调用");
+
+/* CSV 解析器与账单导入 */
+const csvRows = api.parseCsv('名称,金额\r\n"电费,8月","120.50"\r\n水费,60\r\n\r\n垃圾清运,"30"');
+assert(csvRows.length === 4, "CSV 基本行解析(CRLF,纯空行跳过)");
+assert(csvRows[1][0] === "电费,8月" && csvRows[1][1] === "120.50", "引号内逗号不切分");
+assert(csvRows[3][1] === "30", "引号字段正常读取");
+const csvText = "项目,费用,备注\n电费,\"1,200.50\",备注,逗号\n水费,60\n无效行\n,45\n清洁,−20";
+const csvBills = api.billsFromCsv(csvText);
+assert(!csvBills.error && csvBills.bills.length === 2, "表头识别与无效行跳过(实际 " + JSON.stringify(csvBills).slice(0, 80) + ")");
+assert(csvBills.bills[0].name === "电费" && csvBills.bills[0].amount === 120050, "金额去除千分位并转为分");
+assert(csvBills.skipped === 3, "无效/负数/缺名行计入跳过(实际 " + csvBills.skipped + ")");
+assert(api.billsFromCsv("a,b\n1,2").error === "noHeader", "无名称/金额表头时报错");
+assert(api.billsFromCsv("").error === "empty", "空文件报错");
+const gbkSimulated = "名称,金额\n电费,120\n宽带,99";
+const gbkBills = api.billsFromCsv(gbkSimulated);
+assert(gbkBills.bills.length === 2 && gbkBills.bills[1].amount === 9900, "中文名称(GBK 解码后)正常导入");
 
 /* 3) 分享链接编解码往返 */
 const shareSeg = script.split("/* ---------- 示例数据 ---------- */")[1].split("/* ---------- 事件 ---------- */")[0];
