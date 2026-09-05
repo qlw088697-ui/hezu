@@ -230,6 +230,9 @@ const I18N = {
     exportJson: "导出 JSON", importJson: "导入 JSON", clearMonth: "清空本月",
     trendTitle: "📈 月度总支出趋势", monthSuffix: "月",
     historyTotal: "总支出约 {x}", loadBtn: "载入",
+    copyBtn: "复制账单",
+    copyConfirm: "将 {m} 的账单和抄表结构复制到本月吗?本月现有的账单和抄表会被覆盖(成员按名字匹配,复制后可撤销)。",
+    copyDone: "已从 {m} 复制 {b} 笔账单、{t} 项抄表,请核对本读数",
     emptyHistory: "暂无历史月份,点\"保存本月到历史\"留存一份",
     copied: "已复制,去粘贴到群里吧 ✌️", copyFail: "复制失败,请手动选择文本",
     shareNeedMembers: "先添加租客,再生成分享链接", shareCopied: "分享链接已复制,发给室友吧 🔗", copyFailShort: "复制失败",
@@ -253,7 +256,7 @@ const I18N = {
     copyTransfers: "转账", copyTotal: "合计", copyBy: "由「合租账本 HeZu」计算",
     sampleN1: "张三(主卧)", sampleN2: "李四(次卧)", sampleN3: "王五(小卧)",
     sampleB1: "房租", sampleB2: "宽带网费", sampleB3: "清洁用品", sampleM1: "电费", sampleM2: "水费",
-    footer: "HeZu v1.5 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器",
+    footer: "HeZu v1.6 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器",
   },
   en: {
     appTitle: "HeZu Rent Split",
@@ -293,6 +296,9 @@ const I18N = {
     exportJson: "Export JSON", importJson: "Import JSON", clearMonth: "Clear month",
     trendTitle: "📈 Monthly spending trend", monthSuffix: "",
     historyTotal: "Total ≈ {x}", loadBtn: "Load",
+    copyBtn: "Copy bills",
+    copyConfirm: "Copy {m}'s bills and meter structure into this month? Current bills/meters will be overwritten (members matched by name; you can undo).",
+    copyDone: "Copied {b} bills and {t} meters from {m} — please update the current readings",
     emptyHistory: "No saved months yet — click \"Save this month\" to keep one",
     copied: "Copied! Paste it into the group ✌️", copyFail: "Copy failed, please select the text manually",
     shareNeedMembers: "Add roommates before sharing", shareCopied: "Share link copied — send it to your roommates 🔗", copyFailShort: "Copy failed",
@@ -316,7 +322,7 @@ const I18N = {
     copyTransfers: "Transfers", copyTotal: "Total", copyBy: "computed by HeZu",
     sampleN1: "Zhang (Master)", sampleN2: "Li (Middle)", sampleN3: "Wang (Small)",
     sampleB1: "Rent", sampleB2: "Broadband", sampleB3: "Supplies", sampleM1: "Power", sampleM2: "Water",
-    footer: "HeZu v1.5 · MIT · A single-file app. All data stays in your browser",
+    footer: "HeZu v1.6 · MIT · A single-file app. All data stays in your browser",
   },
 };
 let lang = "zh";
@@ -552,6 +558,40 @@ function settlementCsv(){
   }
   return lines.join("\r\n");
 }
+/* 把历史月份的账单/抄表复制到本月:成员按名字匹配,抄表上期读数自动衔接上月本期读数 */
+function copyBillsFromMonth(src, dst){
+  src = src && typeof src === "object" ? src : {};
+  const nameOf = id => { const m = (src.members || []).find(x => x.id === id); return m ? m.name : null; };
+  const currentByName = {};
+  (dst.members || []).forEach(m => { if(!(m.name in currentByName)) currentByName[m.name] = m.id; });
+  const mapId = id => { const n = nameOf(id); return (n != null && currentByName[n]) || ""; };
+  const bills = [];
+  (src.bills || []).forEach(b => {
+    if(!b || typeof b !== "object") return;
+    const participants = (b.participants || []).map(mapId).filter(Boolean);
+    if(!participants.length) return;
+    const shares = {};
+    if(b.mode === "custom" && b.shares && typeof b.shares === "object")
+      Object.keys(b.shares).forEach(id => { const nid = mapId(id); if(nid) shares[nid] = Math.max(0, Math.round(b.shares[id] || 0)); });
+    bills.push({ id: uid(), name: b.name || "",
+      amount: Math.max(0, Math.round(b.amount || 0)),
+      mode: ["equal","weight","custom","room"].includes(b.mode) ? b.mode : "equal",
+      shares, payer: mapId(b.payer) || "", participants });
+  });
+  const meters = [];
+  (src.meters || []).forEach(mt => {
+    if(!mt || typeof mt !== "object") return;
+    const participants = (mt.participants || []).map(mapId).filter(Boolean);
+    meters.push({ id: uid(), name: mt.name || "",
+      prev: typeof mt.curr === "number" && isFinite(mt.curr) ? mt.curr : null, // 上期 = 上月本期
+      curr: null,
+      price: (mt.price == null || !isFinite(+mt.price)) ? null : Math.max(0, +mt.price),
+      mode: ["equal","weight"].includes(mt.mode) ? mt.mode : "equal",
+      payer: mapId(mt.payer) || "",
+      participants: participants.length ? participants : (dst.members || []).map(m => m.id) });
+  });
+  return { bills, meters };
+}
 
 /* ---------- 渲染 ---------- */
 function renderAll(){ renderStatic(); renderMembers(); renderRooms(); renderBills(); renderMeters(); renderResult(); renderHistory(); renderTrend(); renderDatalist(); }
@@ -767,6 +807,7 @@ function renderHistory(){
         (h.meters||[]).forEach(mt => { if(mt.curr >= mt.prev) total += Math.round((mt.curr - mt.prev) * (mt.price||0) * 100); });
         return `<div class="history-item"><b>${esc(mo)}</b>
           <span class="hint">${t("historyTotal").replace("{x}", fmt(total))}</span><span class="grow"></span>
+          <button class="mini" data-act="his-copy" data-mo="${esc(mo)}" title="${t("copyBtn")}">${t("copyBtn")}</button>
           <button class="mini ghost" data-act="his-load" data-mo="${esc(mo)}">${t("loadBtn")}</button>
           <button class="mini danger" data-act="his-del" data-mo="${esc(mo)}">${t("del")}</button></div>`;
       }).join("")
@@ -1225,6 +1266,16 @@ document.getElementById("history").addEventListener("click", e => {
   if(btn.dataset.act === "his-load"){
     if(history[mo]){ state = sanitizeState(JSON.parse(JSON.stringify(history[mo])), mo); save();
       monthInput.value = state.month; renderAll(); toast(t("loaded").replace("{m}", mo)); }
+  }
+  if(btn.dataset.act === "his-copy"){
+    const src = history[mo]; if(!src) return;
+    if(!confirm(t("copyConfirm").replace("{m}", mo))) return;
+    const snapshot = state;
+    const copied = copyBillsFromMonth(src, state);
+    state = { ...state, bills: copied.bills, meters: copied.meters };
+    save(); renderAll();
+    toast(t("copyDone").replace("{m}", mo).replace("{b}", copied.bills.length).replace("{t}", copied.meters.length),
+      t("undo"), () => { state = snapshot; save(); renderAll(); toast(t("restored")); });
   }
   if(btn.dataset.act === "his-del"){
     delete history[mo]; save(); renderAll();

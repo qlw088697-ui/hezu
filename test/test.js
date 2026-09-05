@@ -22,7 +22,7 @@ function makeApi(initState){
     return {
       setState: (s) => { state = s; },
       fmt, splitEqual, splitWeight, expenseOfBill, expenseOfMeter, computeAll,
-      roomRentOf, sanitizeState, settlementCsv,
+      roomRentOf, sanitizeState, settlementCsv, copyBillsFromMonth,
     };`);
 }
 const sampleState = {
@@ -130,6 +130,39 @@ assert(csv.includes('"张三","800.00","3000.00","2200.00"'), "CSV 数据行(应
 assert(csv.includes('"王五","→ 张三","1460.00"'), "CSV 转账行");
 assert(csv.includes("\r\n"), "CSV 使用 CRLF 行尾");
 assert(!csv.includes(",800,"), "CSV 字段均带引号包裹");
+
+/* 复制历史账单到本月:按名字匹配 + 抄表读数衔接 */
+const srcMonth = {
+  month: "2026-08",
+  members: [{ id: "s1", name: "张三", weight: 1 }, { id: "s2", name: "李四", weight: 1 }, { id: "s3", name: "王五", weight: 1 }],
+  bills: [
+    { id: "sb1", name: "房租", amount: 360000, mode: "equal", shares: {}, payer: "s1", participants: ["s1", "s2", "s3"] },
+    { id: "sb2", name: "清洁费", amount: 4500, mode: "custom", shares: { s1: 3000, s2: 1500 }, payer: "", participants: ["s1", "s2"] },
+    { id: "sb3", name: "已退租者的账单", amount: 1000, mode: "equal", shares: {}, payer: "", participants: ["s3"] },
+  ],
+  meters: [
+    { id: "sm1", name: "电费", prev: 1200, curr: 1568, price: 0.55, mode: "equal", payer: "s1", participants: ["s1", "s2"] },
+  ],
+};
+const dstMonth = {
+  month: "2026-09",
+  members: [{ id: "d1", name: "李四", weight: 1 }, { id: "d2", name: "张三", weight: 1 }],
+  bills: [], meters: [],
+};
+const copied = api.copyBillsFromMonth(srcMonth, dstMonth);
+assert(copied.bills.length === 2, "已退租成员的独立账单被跳过(无匹配参与人)");
+const rentCopy = copied.bills.find(b => b.name === "房租");
+assert(rentCopy.payer === "d2", "垫付人按名字映射到新 id(张三 → d2)");
+assert(rentCopy.participants.length === 2, "参与人按名字映射");
+const cleanCopy = copied.bills.find(b => b.name === "清洁费");
+assert(cleanCopy.shares.d2 === 3000 && cleanCopy.shares.d1 === 1500, "自定义份额按名字重映射");
+const meterCopy = copied.meters[0];
+assert(meterCopy.prev === 1568 && meterCopy.curr === null, "抄表上期读数衔接上月本期,本期留空");
+assert(meterCopy.participants.length === 2, "抄表参与人按名字映射");
+const copied2 = api.copyBillsFromMonth(
+  { members: [{ id: "z", name: "陌生产" }], bills: [], meters: [{ name: "水费", prev: 10, curr: 20, price: 3, mode: "equal", payer: "", participants: ["z"] }] },
+  { month: "2026-09", members: [{ id: "d1", name: "李四" }], bills: [], meters: [] });
+assert(copied2.meters[0].participants.length === 1 && copied2.meters[0].participants[0] === "d1", "无匹配时抄表参与人回退为全部成员");
 
 /* 3) 分享链接编解码往返 */
 const shareSeg = script.split("/* ---------- 示例数据 ---------- */")[1].split("/* ---------- 事件 ---------- */")[0];
