@@ -735,7 +735,7 @@ document.getElementById("btn-print").onclick = () => window.print();
 /* 历史与导入导出 */
 document.getElementById("btn-save").onclick = () => {
   history[state.month] = JSON.parse(JSON.stringify(state));
-  save(); renderHistory(); toast(`已保存 ${state.month} 的账单 📦`);
+  save(); renderAll(); toast(`已保存 ${state.month} 的账单 📦`);
 };
 document.getElementById("history").addEventListener("click", e => {
   const btn = e.target.closest("[data-act]"); if(!btn) return;
@@ -745,7 +745,7 @@ document.getElementById("history").addEventListener("click", e => {
       monthInput.value = state.month; renderAll(); toast(`已载入 ${mo}`); }
   }
   if(btn.dataset.act === "his-del"){
-    delete history[mo]; save(); renderHistory();
+    delete history[mo]; save(); renderAll();
   }
 });
 document.getElementById("btn-export").onclick = () => {
