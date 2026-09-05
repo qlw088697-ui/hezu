@@ -232,6 +232,10 @@ assert(aggA.owed === 205000 && aggB.owed === 205000, "每人累计应付 ¥2050.
 assert(aggA.balance === -5000 && aggB.balance === 5000, "累计净额守恒(A -¥50 / B +¥50)");
 assert(api.aggregateMonths(null).months === 0, "空历史返回零月");
 
+/* computeAllFor 对畸形快照先消毒再计算,不抛异常 */
+const rDirty = api.computeAllFor({ members: "x", bills: null, meters: "y", rooms: 7 });
+assert(rDirty.total === 0 && Array.isArray(rDirty.per) && rDirty.per.length === 0, "computeAllFor 对畸形快照消毒后安全计算");
+
 /* 周期说明标签:消毒截断 + 分享链接往返保留 */
 const withLabel = api.sanitizeState({ month: "2026-09", periodLabel: "租期 9/15–10/14，超出四十个字符的很长很长很长很长很长很长很长很长的说明文本", members: [{ id: "a", name: "A" }] }, "2026-09");
 assert(withLabel.periodLabel.length <= 40 && withLabel.periodLabel.startsWith("租期 9/15–10/14"), "周期说明截断至 40 字符");

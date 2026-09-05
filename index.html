@@ -117,7 +117,7 @@
   @media print{
     body{background:#fff;color:#000;}
     header{background:none !important;color:#000;padding:8px 0;}
-    button,#sec-tools,footer,.toast{display:none !important;}
+    button,#sec-tools,footer,.toast,#modal-mask{display:none !important;}
     section{box-shadow:none;border:1px solid #ddd;page-break-inside:avoid;}
   }
 </style>
@@ -226,7 +226,7 @@
 <script>
 "use strict";
 /* 版本号单一来源:页脚与导出文件名统一引用 */
-const APP_VERSION = "2.6";
+const APP_VERSION = "2.7";
 /* ---------- 多语言 ---------- */
 const I18N = {
   zh: {
@@ -535,7 +535,7 @@ function save(){
 
 /* ---------- 工具 ---------- */
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-function toast(msg, actionLabel, onAction){
+function toast(msg, actionLabel, onAction, duration){
   const t = document.getElementById("toast");
   t.innerHTML = esc(msg) + (actionLabel ? ` <a href="javascript:void(0)" id="toast-act">${esc(actionLabel)}</a>` : "");
   if(actionLabel){
@@ -545,7 +545,7 @@ function toast(msg, actionLabel, onAction){
   }
   t.classList.add("show");
   clearTimeout(t._h);
-  t._h = setTimeout(() => t.classList.remove("show"), actionLabel ? 6000 : 1800);
+  t._h = setTimeout(() => t.classList.remove("show"), duration || (actionLabel ? 6000 : 1800));
 }
 function memberById(id){ return state.members.find(m => m.id === id); }
 function memberName(id){ const m = memberById(id); return m ? m.name : "?"; }
@@ -660,10 +660,10 @@ function computeAll(){
   const hasAbnormal = state.meters.some(mt => mt.curr < mt.prev);
   return { expenses, per, transfers, total, unpaid, hasAbnormal };
 }
-/* 在不干扰当前编辑状态的前提下,对任一状态快照跑一遍结算(同步、无副作用) */
+/* 在不干扰当前编辑状态的前提下,对任一状态快照跑一遍结算(同步、无副作用);畸形快照先消毒 */
 function computeAllFor(s){
   const prev = state;
-  state = s;
+  state = sanitizeState(s, s && s.month);
   try{ return computeAll(); }
   finally{ state = prev; }
 }
@@ -796,8 +796,10 @@ function renderAggregate(){
   const months = Object.keys(history).filter(mo => /^\d{4}-\d{2}$/.test(mo)).length;
   if(months < 1){ box.innerHTML = ""; return; }
   const agg = aggregateMonths(history);
+  const prevDetails = box.querySelector("details");
+  const wasOpen = prevDetails ? prevDetails.open : false;
   const row = (n, o, p, b, cls) => `<tr><td>${esc(n)}</td><td class="num">${fmt(o)}</td><td class="num">${fmt(p)}</td><td class="num ${cls}">${b}</td></tr>`;
-  box.innerHTML = `<details style="margin-top:10px">
+  box.innerHTML = `<details ${wasOpen ? "open" : ""}>
     <summary style="cursor:pointer;font-size:13px;color:var(--muted)">${t("aggTitle").replace("{n}", agg.months).replace("{x}", fmt(agg.total))}</summary>
     <table style="margin-top:8px"><thead><tr><th>${t("thMember")}</th><th class="num">${t("thOwed")}</th><th class="num">${t("thPaid")}</th><th class="num">${t("thNet")}</th></tr></thead><tbody>
     ${agg.per.map(p => {
@@ -850,8 +852,8 @@ function renderStatic(){
 
 function memberChips(selected, onToggleAttr){
   if(!state.members.length) return `<span class="hint">${t("addMembersFirst")}</span>`;
-  return `<div class="chips"><span class="chip" data-act-toggle-all title="${t("selectAllTip")}">${t("selectAll")}</span>` + state.members.map(m =>
-    `<span class="chip ${selected.includes(m.id) ? "on" : ""}" ${onToggleAttr}="${m.id}">${esc(m.name)}</span>`
+  return `<div class="chips"><span class="chip" role="button" tabindex="0" data-act-toggle-all title="${t("selectAllTip")}">${t("selectAll")}</span>` + state.members.map(m =>
+    `<span class="chip ${selected.includes(m.id) ? "on" : ""}" role="button" tabindex="0" ${onToggleAttr}="${m.id}">${esc(m.name)}</span>`
   ).join("") + `</div>`;
 }
 function customSumTag(b){
@@ -1036,6 +1038,7 @@ function buildText(){
     r.transfers.forEach(tr => s += `· ${tr.from.name} → ${tr.to.name}:${fmt(tr.amount)}\n`);
   }
   s += `\n${t("copyTotal")}:${fmt(r.total)} · ${t("copyBy")}`;
+  if(r.unpaid > 0) s += `\n⚠️ ${t("unpaidWarn").replace("{x}", fmt(r.unpaid))}`;
   return s;
 }
 
@@ -1329,6 +1332,12 @@ delegate(roomsBox, btn => {
 });
 
 function wireToggleChips(box){
+  box.addEventListener("keydown", e => {
+    if((e.key === "Enter" || e.key === " ") && e.target.classList && e.target.classList.contains("chip")){
+      e.preventDefault();
+      e.target.click();
+    }
+  });
   box.addEventListener("click", e => {
     const allChip = e.target.closest("[data-act-toggle-all]");
     if(allChip){
@@ -1763,7 +1772,7 @@ if("serviceWorker" in navigator && location.protocol === "https:"){
       if(!nw) return;
       nw.addEventListener("statechange", () => {
         if(nw.state === "installed" && navigator.serviceWorker.controller){
-          toast(t("updateReady"));
+          toast(t("updateReady"), null, null, 8000);
         }
       });
     });
