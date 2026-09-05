@@ -193,6 +193,7 @@
       <button class="danger" id="btn-clear">清空本月</button>
     </div>
     <div style="margin-top:8px" id="trend"></div>
+    <div id="aggregate"></div>
     <div id="history" style="margin-top:8px"></div>
   </section>
 
@@ -257,6 +258,7 @@ const I18N = {
     toolsTitle: "保存与记录", saveMonth: "保存本月到历史",
     exportJson: "导出 JSON", importJson: "导入 JSON", clearMonth: "清空本月",
     trendTitle: "📈 月度总支出趋势", monthSuffix: "月",
+    aggTitle: "📊 累计统计(已保存 {n} 个月,总支出 {x})", aggTotal: "总计",
     themeTitle: "主题", themeAuto: "跟随系统", themeLight: "浅色", themeDark: "深色",
     historyTotal: "总支出约 {x}", loadBtn: "载入",
     viewBtn: "👁️ 查看", detailTitle: "{m} 账单详情", closeBtn: "关闭",
@@ -292,7 +294,7 @@ const I18N = {
     copyTransfers: "转账", copyTotal: "合计", copyBy: "由「合租账本 HeZu」计算",
     sampleN1: "张三(主卧)", sampleN2: "李四(次卧)", sampleN3: "王五(小卧)",
     sampleB1: "房租", sampleB2: "宽带网费", sampleB3: "清洁用品", sampleM1: "电费", sampleM2: "水费",
-    footer: "HeZu v2.0 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器",
+    footer: "HeZu v2.1 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器",
   },
   en: {
     appTitle: "HeZu Rent Split",
@@ -336,6 +338,7 @@ const I18N = {
     toolsTitle: "Save & records", saveMonth: "Save this month",
     exportJson: "Export JSON", importJson: "Import JSON", clearMonth: "Clear month",
     trendTitle: "📈 Monthly spending trend", monthSuffix: "",
+    aggTitle: "📊 All-time stats ({n} saved months, total {x})", aggTotal: "Total",
     themeTitle: "Theme", themeAuto: "Auto (system)", themeLight: "Light", themeDark: "Dark",
     historyTotal: "Total ≈ {x}", loadBtn: "Load",
     viewBtn: "👁️ View", detailTitle: "Bill details for {m}", closeBtn: "Close",
@@ -371,7 +374,7 @@ const I18N = {
     copyTransfers: "Transfers", copyTotal: "Total", copyBy: "computed by HeZu",
     sampleN1: "Zhang (Master)", sampleN2: "Li (Middle)", sampleN3: "Wang (Small)",
     sampleB1: "Rent", sampleB2: "Broadband", sampleB3: "Supplies", sampleM1: "Power", sampleM2: "Water",
-    footer: "HeZu v2.0 · MIT · A single-file app. All data stays in your browser",
+    footer: "HeZu v2.1 · MIT · A single-file app. All data stays in your browser",
   },
 };
 let lang = "zh";
@@ -620,6 +623,22 @@ function computeAllFor(s){
   try{ return computeAll(); }
   finally{ state = prev; }
 }
+/* 跨月累计:按成员名字聚合所有已保存月份 */
+function aggregateMonths(hs){
+  const acc = {}; let months = 0, total = 0, paid = 0;
+  Object.keys(hs || {}).sort().forEach(mo => {
+    if(!/^\d{4}-\d{2}$/.test(mo)) return;
+    const r = computeAllFor(sanitizeState(hs[mo], mo));
+    months++; total += r.total; paid += r.per.reduce((s, p) => s + p.paid, 0);
+    r.per.forEach(p => {
+      if(!acc[p.m.name]) acc[p.m.name] = { name: p.m.name, owed: 0, paid: 0, balance: 0 };
+      acc[p.m.name].owed += p.owed;
+      acc[p.m.name].paid += p.paid;
+      acc[p.m.name].balance += p.balance;
+    });
+  });
+  return { months, total, paid, per: Object.values(acc).sort((a, b) => b.balance - a.balance) };
+}
 /* 结算表 CSV(带引号转义,CRLF 行尾) */
 function settlementCsv(){
   const r = computeAll();
@@ -727,7 +746,26 @@ function copyBillsFromMonth(src, dst){
 }
 
 /* ---------- 渲染 ---------- */
-function renderAll(){ renderStatic(); renderMembers(); renderRooms(); renderBills(); renderMeters(); renderResult(); renderHistory(); renderTrend(); renderDatalist(); }
+/* 累计统计(折叠面板) */
+function renderAggregate(){
+  const box = document.getElementById("aggregate");
+  const months = Object.keys(history).filter(mo => /^\d{4}-\d{2}$/.test(mo)).length;
+  if(months < 1){ box.innerHTML = ""; return; }
+  const agg = aggregateMonths(history);
+  const row = (n, o, p, b, cls) => `<tr><td>${esc(n)}</td><td class="num">${fmt(o)}</td><td class="num">${fmt(p)}</td><td class="num ${cls}">${b}</td></tr>`;
+  box.innerHTML = `<details style="margin-top:10px">
+    <summary style="cursor:pointer;font-size:13px;color:var(--muted)">${t("aggTitle").replace("{n}", agg.months).replace("{x}", fmt(agg.total))}</summary>
+    <table style="margin-top:8px"><thead><tr><th>${t("thMember")}</th><th class="num">${t("thOwed")}</th><th class="num">${t("thPaid")}</th><th class="num">${t("thNet")}</th></tr></thead><tbody>
+    ${agg.per.map(p => {
+      const bal = p.balance > 0 ? "+" + fmt(p.balance) : p.balance < 0 ? "-" + fmt(-p.balance) : fmt(0);
+      const cls = p.balance > 0 ? "pos" : (p.balance < 0 ? "neg" : "");
+      return row(p.name, p.owed, p.paid, bal, cls);
+    }).join("")}
+    <tr><td><b>${t("aggTotal")}</b></td><td class="num"><b>${fmt(agg.total)}</b></td><td class="num"><b>${fmt(agg.paid)}</b></td><td></td></tr>
+    </tbody></table></details>`;
+}
+
+function renderAll(){ renderStatic(); renderMembers(); renderRooms(); renderBills(); renderMeters(); renderResult(); renderHistory(); renderTrend(); renderAggregate(); renderDatalist(); }
 
 /* 静态文案(标题、按钮、提示)按当前语言刷新 */
 function renderStatic(){
@@ -1126,6 +1164,16 @@ membersBox.addEventListener("input", e => {
   if(e.target.dataset.act === "member-name") m.name = e.target.value;
   if(e.target.dataset.act === "member-weight") m.weight = Math.max(0, parseFloat(e.target.value) || 0);
   save();
+});
+/* 在姓名输入框按回车,快速追加下一位租客并聚焦 */
+membersBox.addEventListener("keydown", e => {
+  if(e.key === "Enter" && e.target.dataset && e.target.dataset.act === "member-name"){
+    e.preventDefault();
+    document.getElementById("btn-add-member").click();
+    const rows = document.querySelectorAll('[data-act="member-name"]');
+    const last = rows[rows.length - 1];
+    if(last){ last.focus(); last.select(); }
+  }
 });
 delegate(membersBox, btn => {
   if(btn.dataset.act === "sample"){ loadSample(); return; }

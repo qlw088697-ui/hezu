@@ -23,7 +23,7 @@ function makeApi(initState){
       setState: (s) => { state = s; },
       fmt, splitEqual, splitWeight, expenseOfBill, expenseOfMeter, computeAll,
       roomRentOf, sanitizeState, settlementCsv, copyBillsFromMonth, parseBackup, computeAllFor,
-      parseCsv, billsFromCsv,
+      parseCsv, billsFromCsv, aggregateMonths,
     };`);
 }
 const sampleState = {
@@ -211,6 +211,26 @@ assert(api.billsFromCsv("").error === "empty", "空文件报错");
 const gbkSimulated = "名称,金额\n电费,120\n宽带,99";
 const gbkBills = api.billsFromCsv(gbkSimulated);
 assert(gbkBills.bills.length === 2 && gbkBills.bills[1].amount === 9900, "中文名称(GBK 解码后)正常导入");
+
+/* 跨月累计统计 */
+function monthFixture(mo, payerId, withMeter){
+  return { month: mo,
+    members: [{ id: "a", name: "A", weight: 1 }, { id: "b", name: "B", weight: 1 }],
+    bills: [{ id: "b" + mo, name: "房租", amount: 200000, mode: "equal", shares: {}, payer: payerId, participants: ["a","b"] }],
+    meters: withMeter ? [{ id: "m" + mo, name: "电费", prev: 0, curr: 100, price: 1, mode: "equal", payer: payerId, participants: ["a","b"] }] : [] };
+}
+const hist = {
+  "2026-01": monthFixture("2026-01", "a", false),   // A 垫付 2000,每人应付 1000
+  "2026-02": monthFixture("2026-02", "b", true),    // B 垫付 2100,每人应付 1050
+  "bad-key": { members: [] },
+};
+const agg = api.aggregateMonths(hist);
+assert(agg.months === 2, "累计月数正确(非法键不计)");
+assert(agg.total === 410000 && agg.paid === 410000, "累计总支出与总垫付 ¥4100.00(实际 " + api.fmt(agg.total) + ")");
+const aggA = agg.per.find(p => p.name === "A"), aggB = agg.per.find(p => p.name === "B");
+assert(aggA.owed === 205000 && aggB.owed === 205000, "每人累计应付 ¥2050.00");
+assert(aggA.balance === -5000 && aggB.balance === 5000, "累计净额守恒(A -¥50 / B +¥50)");
+assert(api.aggregateMonths(null).months === 0, "空历史返回零月");
 
 /* 3) 分享链接编解码往返 */
 const shareSeg = script.split("/* ---------- 示例数据 ---------- */")[1].split("/* ---------- 事件 ---------- */")[0];
