@@ -347,7 +347,7 @@ function renderBills(){
             <div class="field"><label>${esc(memberName(id))} 承担(元)</label>
               <input type="number" inputmode="decimal" data-act="bill-share" data-mid="${id}" value="${b.shares && b.shares[id] ? (b.shares[id]/100) : ""}" min="0" step="0.01"></div>`).join("")}
         </div>
-        <div style="margin-top:4px">${customSumTag(b)}</div>` : ""}
+        <div style="margin-top:4px" data-sum>${customSumTag(b)}</div>` : ""}
     </div>`).join("") ||
     `<div class="empty">暂无账单项,点"添加账单"录入房租、网络费等</div>`;
 }
@@ -585,6 +585,8 @@ billsBox.addEventListener("input", e => {
     const amt = item.querySelector(".amt"); if(amt) amt.textContent = fmt(b.amount || 0);
   }
   if(a === "bill-share") { b.shares = b.shares || {}; b.shares[e.target.dataset.mid] = toCents(e.target.value); }
+  const sumBox = item.querySelector("[data-sum]");
+  if(sumBox) sumBox.innerHTML = customSumTag(b);
   save(); renderResult();
 });
 billsBox.addEventListener("change", e => {
