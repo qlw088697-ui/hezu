@@ -22,6 +22,7 @@ function makeApi(initState){
     return {
       setState: (s) => { state = s; },
       fmt, splitEqual, splitWeight, expenseOfBill, expenseOfMeter, computeAll,
+      roomRentOf, sanitizeState,
     };`);
 }
 const sampleState = {
@@ -64,6 +65,62 @@ api.setState({ ...sampleState, meters: [...sampleState.meters, { id: "m2", name:
 const r2 = api.computeAll();
 assert(r2.hasAbnormal === true, "读数异常被检测");
 assert(r2.total === 315000, "异常抄表不计入总金额");
+
+/* 房间模式:金额由各住客房间租金推导 */
+api.setState({
+  month: "2026-09",
+  members: [{ id: "a", name: "A", weight: 1 }, { id: "b", name: "B", weight: 1 }],
+  rooms: [
+    { id: "r1", name: "Master", rent: 200000, occupantId: "a" },
+    { id: "r2", name: "Small", rent: 120000, occupantId: "b" },
+  ],
+  bills: [{ id: "b1", name: "Rent", amount: 0, mode: "room", shares: {}, payer: "a", participants: ["a","b"] }],
+  meters: [],
+});
+const r3 = api.computeAll();
+const owed3 = Object.fromEntries(r3.per.map(p => [p.m.name, p.owed]));
+assert(owed3["A"] === 200000 && owed3["B"] === 120000, "按房间分摊:各付各的房间租金");
+assert(r3.total === 320000, "按房间模式金额自动汇总为 ¥3200.00");
+const e3 = api.expenseOfBill({ id: "x", name: "Rent", amount: 0, mode: "room", shares: {}, payer: "", participants: ["a","b"] });
+assert(e3.missingRooms === 0, "全员有房间时无缺失提醒");
+api.setState({
+  ...({ month: "2026-09",
+    members: [{ id: "a", name: "A", weight: 1 }, { id: "b", name: "B", weight: 1 }, { id: "c", name: "C", weight: 1 }],
+    rooms: [
+      { id: "r1", name: "Master", rent: 200000, occupantId: "a" },
+      { id: "r2", name: "Small", rent: 120000, occupantId: "b" },
+    ],
+    bills: [], meters: [] }),
+});
+const e4 = api.expenseOfBill({ id: "x", name: "Rent", amount: 0, mode: "room", shares: {}, payer: "", participants: ["a","b","c"] });
+assert(e4.missingRooms === 1, "未分配房间的参与人被标记(按 0 计)");
+assert(e4.amount === 320000, "缺失房间不影响有房间者的汇总金额");
+
+/* 数据消毒:畸形/恶意数据被规范化 */
+const dirty = {
+  month: "999x",
+  members: [{ name: "<img src=x onerror=alert(1)>", weight: "abc", id: 123 }, { name: "A", id: "a", weight: 1 }],
+  bills: [{ mode: "HACK", amount: 1250, participants: ["ghost", "a"], payer: { evil: 1 }, shares: { a: "oops" } },
+          { mode: "custom", amount: 1000, shares: { a: -500 }, participants: ["a"] }],
+  meters: [{ prev: "x", curr: 1e13, price: -3, mode: "explode" }],
+  rooms: [{ rent: "-5", occupantId: "ghost" }, "junk"],
+  extra: { nested: true },
+};
+const clean = api.sanitizeState(dirty, "2026-09");
+assert(clean.month === "2026-09", "非法月份回退到默认月份");
+assert(typeof clean.members[0].id === "string" && clean.members[0].id.length > 0, "成员 id 强制为字符串");
+assert(typeof clean.members[0].name === "string" && clean.members[0].name.length <= 40, "成员名称截断为字符串(渲染层再转义)");
+assert(clean.members[0].weight === 1, "非法权重回退默认值 1");
+assert(clean.bills[0].mode === "equal", "未知的分摊方式回退为均摊");
+assert(clean.bills[0].amount === 1250, "金额以整数分规范化(1250 保持不变)");
+assert(clean.bills[0].participants.length === 1 && clean.bills[0].participants[0] === "a", "未知参与者被过滤");
+assert(clean.bills[0].payer === "", "非法垫付人被清空");
+assert(clean.bills[1].shares.a === 0, "负数份额被钳制为 0");
+assert(clean.meters[0].prev === null && clean.meters[0].curr === 1000000000000 && clean.meters[0].price === 0, "抄表读数/单价被钳制");
+assert(clean.meters[0].mode === "equal", "未知抄表分摊方式回退");
+assert(clean.rooms[0].rent === 0 && clean.rooms[0].occupantId === "", "房间负租金与未知住客被钳制");
+assert(Array.isArray(clean.rooms) && clean.rooms.length === 2, "数组长度仍在白名单范围内");
+assert(!("extra" in clean), "消毒器丢弃未知字段");
 
 /* 3) 分享链接编解码往返 */
 const shareSeg = script.split("/* ---------- 示例数据 ---------- */")[1].split("/* ---------- 事件 ---------- */")[0];

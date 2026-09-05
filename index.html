@@ -42,8 +42,13 @@
   button.danger{color:var(--danger);}
   button.mini{padding:2px 9px;font-size:12.5px;}
   button:disabled{opacity:.45;cursor:not-allowed;}
-  input[type=text],input[type=number],select{font:inherit;padding:7px 10px;border:1px solid var(--line);
+  input[type=text],input[type=number],select,textarea{font:inherit;padding:7px 10px;border:1px solid var(--line);
     border-radius:9px;background:var(--field);color:var(--text);width:100%;}
+  textarea{resize:vertical;}
+  .room-row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;}
+  .room-row .nm{flex:1 1 110px;}
+  .room-row .rent{width:100px;}
+  .room-row select.occ{width:120px;flex:none;}
   input:focus,select:focus{outline:2px solid var(--primary-soft);border-color:var(--primary);}
   .grid{display:grid;gap:10px;}
   .cols-2{grid-template-columns:1fr 1fr;}
@@ -116,9 +121,24 @@
 
   <section id="sec-members">
   <h2>👥 <span id="t-h-members">租客</span> <span class="tag" id="member-count"></span><span class="grow"></span>
-      <button class="primary mini" id="btn-add-member">＋ 添加租客</button></h2>
+      <button class="primary mini" id="btn-add-member">＋ 添加租客</button>
+      <button class="mini" id="btn-batch-member">⌨️ 批量</button></h2>
   <p class="hint" id="t-hint-members">权重用于"按权重"分摊:比如主卧 1.5、次卧 1。均摊模式不受权重影响。</p>
+  <div id="batch-box" hidden>
+    <textarea id="batch-input" rows="3"></textarea>
+    <div class="row-between" style="margin-top:6px">
+      <span class="hint grow" id="t-batch-tip"></span>
+      <button class="primary mini" id="btn-batch-confirm">添加</button>
+    </div>
+  </div>
     <div id="members"></div>
+  </section>
+
+  <section id="sec-rooms">
+    <h2>🚪 <span id="t-h-rooms">房间(可选)</span><span class="grow"></span>
+      <button class="primary mini" id="btn-add-room">＋ 添加房间</button></h2>
+    <p class="hint" id="t-hint-rooms">给房间填租金并选好住客,账单的"分摊方式"里会出现"按房间",金额自动等于各人房间租金之和。</p>
+    <div id="rooms"></div>
   </section>
 
   <section id="sec-bills">
@@ -147,6 +167,7 @@
 
   <section id="sec-tools">
     <h2>🗄️ <span id="t-h-tools">保存与记录</span></h2>
+  <p class="hint" id="t-hint-tools">数据仅保存在此浏览器中;清除浏览器数据前,记得先导出 JSON 备份。</p>
     <div class="row-between" style="margin-top:10px">
       <button class="primary" id="btn-save">保存本月到历史</button>
       <span class="grow"></span>
@@ -208,9 +229,19 @@ const I18N = {
     emptyHistory: "暂无历史月份,点\"保存本月到历史\"留存一份",
     copied: "已复制,去粘贴到群里吧 ✌️", copyFail: "复制失败,请手动选择文本",
     shareNeedMembers: "先添加租客,再生成分享链接", shareCopied: "分享链接已复制,发给室友吧 🔗", copyFailShort: "复制失败",
-    saved: "已保存 {m} 的账单 📦", imported: "导入成功 ✅", importFail: "导入失败:文件格式不对",
+    saved: "已保存 {m} 的账单 📦", loaded: "已载入 {m}", imported: "导入成功 ✅", importFail: "导入失败:文件格式不对",
     cleared: "已清空", undo: "撤销", restored: "已恢复 ✅", sampleLoaded: "已载入示例数据,随便改 🎉",
-    memberDefault: "租客",
+    memberDefault: "租客", saveFail: "保存失败:浏览器存储空间不足或被禁用",
+    roomsTitle: "房间(可选)", addRoom: "＋ 添加房间",
+    roomsHint: "给房间填租金并选好住客,账单的\"分摊方式\"里会出现\"按房间\",金额自动等于各人房间租金之和。",
+    roomNamePh: "如:主卧", rentLabel: "月租(元)", occupantLabel: "住客", occupantNone: "(空)",
+    modeRoom: "按房间", roomAutoTip: "按房间模式:金额由各人房间租金自动汇总",
+    roomOk: "✓ 按房间租金分摊,合计 {x}", roomMissing: "⚠️ {n} 位参与人未分配房间,按 0 计",
+    roomEmpty: "还没有房间;不需要房间分摊可忽略此区。",
+    batchBtn: "⌨️ 批量", batchPh: "每行一个名字,也可用逗号、顿号或空格分隔", batchAdd: "添加",
+    batchTip: "粘贴名单后点\"添加\",自动识别换行/逗号/空格分隔",
+    batchAdded: "已添加 {n} 位租客 🎉", batchNone: "没有新名字可添加(可能与现有重名)",
+    dataHint: "数据仅保存在此浏览器中;清除浏览器数据前,记得先导出 JSON 备份。",
     clearConfirm: "确定清空本月的全部数据吗?(历史记录不受影响)",
     overwriteConfirm: "载入分享的账单会覆盖当前正在编辑的内容,继续吗?",
     billFallback: "账单", meterFallback: "抄表",
@@ -259,9 +290,19 @@ const I18N = {
     emptyHistory: "No saved months yet — click \"Save this month\" to keep one",
     copied: "Copied! Paste it into the group ✌️", copyFail: "Copy failed, please select the text manually",
     shareNeedMembers: "Add roommates before sharing", shareCopied: "Share link copied — send it to your roommates 🔗", copyFailShort: "Copy failed",
-    saved: "Saved {m} 📦", imported: "Imported ✅", importFail: "Import failed: bad file format",
+    saved: "Saved {m} 📦", loaded: "Loaded {m}", imported: "Imported ✅", importFail: "Import failed: bad file format",
     cleared: "Cleared", undo: "Undo", restored: "Restored ✅", sampleLoaded: "Sample loaded — edit freely 🎉",
-    memberDefault: "Roommate",
+    memberDefault: "Roommate", saveFail: "Save failed: browser storage is full or disabled",
+    roomsTitle: "Rooms (optional)", addRoom: "＋ Add room",
+    roomsHint: "Set each room's rent and occupant, then pick \"By room\" in a bill's split mode — the amount is the sum of room rents.",
+    roomNamePh: "e.g. Master room", rentLabel: "Monthly rent", occupantLabel: "Occupant", occupantNone: "(empty)",
+    modeRoom: "By room", roomAutoTip: "Room mode: the amount is the sum of each occupant's rent",
+    roomOk: "✓ Split by room rents, total {x}", roomMissing: "⚠️ {n} participant(s) without a room count as 0",
+    roomEmpty: "No rooms yet — ignore this section if you don't need it.",
+    batchBtn: "⌨️ Batch", batchPh: "One name per line, or separated by commas / spaces", batchAdd: "Add",
+    batchTip: "Paste your list and click Add — line breaks, commas and spaces all work",
+    batchAdded: "Added {n} roommate(s) 🎉", batchNone: "No new names to add (duplicates skipped)",
+    dataHint: "Data lives only in this browser — export a JSON backup before clearing browser data.",
     clearConfirm: "Clear all data for this month? (Saved history is not affected)",
     overwriteConfirm: "Loading the shared bill will overwrite your current edits. Continue?",
     billFallback: "Bill", meterFallback: "Meter",
@@ -290,19 +331,77 @@ const LS_CUR = "hezu:v1:current", LS_HIS = "hezu:v1:history";
 let state = null;
 let history = {};
 
-function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(36).slice(2)); }
+function uid(){
+  const c = (typeof crypto !== "undefined") && crypto.randomUUID;
+  return c ? crypto.randomUUID() : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+}
 function nowMonth(){ const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); }
-function blankState(){ return { month: nowMonth(), members: [], bills: [], meters: [] }; }
+function blankState(){ return { month: nowMonth(), members: [], bills: [], meters: [], rooms: [] }; }
+
+/* 数据消毒:任何来源(导入/分享链接/历史/本地存储)的数据先规范化,防畸形数据与注入 */
+function sanitizeState(raw, fallbackMonth){
+  raw = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const s = {
+    month: /^\d{4}-\d{2}$/.test(raw.month || "") ? raw.month : (fallbackMonth || nowMonth()),
+    members: [], bills: [], meters: [], rooms: [],
+  };
+  const clip = (v, n) => String(v == null ? "" : v).slice(0, n);
+  (Array.isArray(raw.members) ? raw.members : []).slice(0, 100).forEach((m, i) => {
+    m = m && typeof m === "object" ? m : {};
+    const id = (typeof m.id === "string" && m.id) ? m.id.slice(0, 64) : uid();
+    s.members.push({ id, name: clip(m.name, 40) || t("memberDefault") + (i + 1), weight: num(m.weight, 0, 99, 1) });
+  });
+  const idset = new Set(s.members.map(m => m.id));
+  const parts = a => [...new Set((Array.isArray(a) ? a : []).filter(id => typeof id === "string" && idset.has(id)))];
+  const payer = p => (typeof p === "string" && idset.has(p)) ? p : "";
+  const centsOf = v => Math.min(1e9, Math.max(0, Math.round(+v || 0)));
+  const numOrNull = v => { const n = +v; return (v == null || v === "" || !isFinite(n)) ? null : Math.max(-1e12, Math.min(1e12, n)); };
+  (Array.isArray(raw.bills) ? raw.bills : []).slice(0, 200).forEach(b => {
+    b = b && typeof b === "object" ? b : {};
+    const mode = ["equal","weight","custom","room"].includes(b.mode) ? b.mode : "equal";
+    const participants = parts(b.participants);
+    const shares = {};
+    if(mode === "custom" && b.shares && typeof b.shares === "object")
+      Object.keys(b.shares).forEach(id => { if(idset.has(id)) shares[id] = centsOf(b.shares[id]); });
+    s.bills.push({ id: uid(), name: clip(b.name, 40), amount: centsOf(b.amount), mode, shares,
+      payer: payer(b.payer), participants });
+  });
+  (Array.isArray(raw.meters) ? raw.meters : []).slice(0, 100).forEach(mt => {
+    mt = mt && typeof mt === "object" ? mt : {};
+    const price = numOrNull(mt.price);
+    s.meters.push({ id: uid(), name: clip(mt.name, 40), prev: numOrNull(mt.prev), curr: numOrNull(mt.curr),
+      price: price == null ? null : Math.max(0, price),
+      mode: ["equal","weight"].includes(mt.mode) ? mt.mode : "equal",
+      payer: payer(mt.payer), participants: parts(mt.participants) });
+  });
+  (Array.isArray(raw.rooms) ? raw.rooms : []).slice(0, 50).forEach(r => {
+    r = r && typeof r === "object" ? r : {};
+    s.rooms.push({ id: uid(), name: clip(r.name, 40), rent: centsOf(r.rent), occupantId: payer(r.occupantId) });
+  });
+  // 房间模式账单的金额由房间租金推导
+  const rentOf = id => { const r = s.rooms.find(x => x.occupantId === id); return r ? r.rent : 0; };
+  s.bills.forEach(b => { if(b.mode === "room") b.amount = b.participants.reduce((sum, id) => sum + rentOf(id), 0); });
+  return s;
+}
+/* 数值清洗:非法/越界时给默认值 */
+function num(v, min, max, dflt){
+  const n = typeof v === "number" ? v : parseFloat(v);
+  if(!isFinite(n)) return dflt;
+  return Math.min(max, Math.max(min, n));
+}
 
 function load(){
-  try{ state = JSON.parse(localStorage.getItem(LS_CUR)) || blankState(); }
-  catch(e){ state = blankState(); }
+  let raw = null;
+  try{ raw = JSON.parse(localStorage.getItem(LS_CUR)); }catch(e){}
+  state = sanitizeState(raw, nowMonth());
   try{ history = JSON.parse(localStorage.getItem(LS_HIS)) || {}; }catch(e){ history = {}; }
-  if(!state.month) state.month = nowMonth();
+  if(typeof history !== "object" || Array.isArray(history) || history === null) history = {};
 }
 function save(){
-  localStorage.setItem(LS_CUR, JSON.stringify(state));
-  localStorage.setItem(LS_HIS, JSON.stringify(history));
+  try{
+    localStorage.setItem(LS_CUR, JSON.stringify(state));
+    localStorage.setItem(LS_HIS, JSON.stringify(history));
+  }catch(e){ toast(t("saveFail")); }
 }
 
 /* ---------- 工具 ---------- */
@@ -354,17 +453,29 @@ function splitWeight(amountCents, entries){ // entries: [{id, weight}]
 }
 
 /* ---------- 计算 ---------- */
+/* 房间:某位住客的房间租金(没有房间则 0) */
+function roomRentOf(id){
+  const r = (state.rooms || []).find(x => x.occupantId === id);
+  return r ? Math.max(0, Math.round(r.rent || 0)) : 0;
+}
 function expenseOfBill(b){
   const parts = b.participants.filter(id => memberById(id));
-  let shares = {};
+  let shares = {}, amount = Math.max(0, Math.round(b.amount || 0)), missingRooms = 0;
   if(b.mode === "custom"){
     parts.forEach(id => { shares[id] = toCents((b.shares && b.shares[id]) || 0); });
+  }else if(b.mode === "room"){
+    amount = 0;
+    parts.forEach(id => {
+      const rent = roomRentOf(id);
+      if(rent > 0) amount += rent; else missingRooms++;
+      shares[id] = rent;
+    });
   }else if(b.mode === "weight"){
-    shares = splitWeight(b.amount, parts.map(id => ({ id, weight: (memberById(id)||{}).weight || 1 })));
+    shares = splitWeight(amount, parts.map(id => ({ id, weight: (memberById(id)||{}).weight || 1 })));
   }else{
-    shares = splitEqual(b.amount, parts);
+    shares = splitEqual(amount, parts);
   }
-  return { name: b.name || t("billFallback"), amount: b.amount, shares, payer: b.payer || "", parts };
+  return { name: b.name || t("billFallback"), amount, shares, payer: b.payer || "", parts, missingRooms };
 }
 function expenseOfMeter(mt){
   const amount = Math.max(0, Math.round(((mt.curr || 0) - (mt.prev || 0)) * (mt.price || 0) * 100));
@@ -383,8 +494,10 @@ function computeAll(){
   state.members.forEach(m => { owed[m.id] = 0; paid[m.id] = 0; });
   const expenses = [];
   state.bills.forEach(b => {
-    if(!b.amount || !b.participants.length) return;
-    const e = expenseOfBill(b); expenses.push(e);
+    if(!b.participants.length) return;
+    const e = expenseOfBill(b);
+    if(!e.amount) return;
+    expenses.push(e);
     for(const id in e.shares){ owed[id] = (owed[id]||0) + e.shares[id]; }
     if(e.payer && memberById(e.payer)) paid[e.payer] += e.amount;
   });
@@ -420,7 +533,7 @@ function computeAll(){
 }
 
 /* ---------- 渲染 ---------- */
-function renderAll(){ renderStatic(); renderMembers(); renderBills(); renderMeters(); renderResult(); renderHistory(); renderTrend(); renderDatalist(); }
+function renderAll(){ renderStatic(); renderMembers(); renderRooms(); renderBills(); renderMeters(); renderResult(); renderHistory(); renderTrend(); renderDatalist(); }
 
 /* 静态文案(标题、按钮、提示)按当前语言刷新 */
 function renderStatic(){
@@ -429,7 +542,9 @@ function renderStatic(){
   set("t-app-title", "appTitle");
   set("t-sub", "tagline");
   set("t-month-label", "monthLabel");
-  set("t-h-members", "membersTitle"); set("btn-add-member", "addMember"); set("t-hint-members", "membersHint");
+  set("t-h-members", "membersTitle"); set("btn-add-member", "addMember"); set("btn-batch-member", "batchBtn"); set("t-hint-members", "membersHint");
+  set("t-h-rooms", "roomsTitle"); set("btn-add-room", "addRoom"); set("t-hint-rooms", "roomsHint");
+  set("t-hint-tools", "dataHint");
   set("t-h-bills", "billsTitle"); set("btn-add-bill", "addBill");
   set("t-h-meters", "metersTitle"); set("btn-add-meter", "addMeter"); set("t-hint-meters", "metersHint");
   set("t-h-result", "resultTitle");
@@ -437,6 +552,10 @@ function renderStatic(){
   set("t-h-tools", "toolsTitle");
   set("btn-save", "saveMonth"); set("btn-export", "exportJson"); set("btn-import", "importJson"); set("btn-clear", "clearMonth");
   set("t-footer", "footer");
+  const bi = document.getElementById("batch-input");
+  if(bi) bi.placeholder = t("batchPh");
+  set("t-batch-tip", "batchTip");
+  set("btn-batch-confirm", "batchAdd");
   const bl = document.getElementById("btn-lang");
   if(bl) bl.textContent = lang === "zh" ? "EN" : "中文";
 }
@@ -460,8 +579,10 @@ function payerOptions(sel){
     `<option value="${m.id}" ${m.id === sel ? "selected" : ""}>${esc(m.name)}</option>`).join("");
 }
 function modeOptions(sel, withCustom){
+  const hasRooms = (state.rooms || []).some(r => r.occupantId && memberById(r.occupantId));
   const opts = [["equal", t("modeEqual")], ["weight", t("modeWeight")]];
   if(withCustom) opts.push(["custom", t("modeCustom")]);
+  if(hasRooms || sel === "room") opts.push(["room", t("modeRoom")]);
   return opts.map(([v, label]) => `<option value="${v}" ${sel===v?"selected":""}>${label}</option>`).join("");
 }
 
@@ -479,17 +600,42 @@ function renderMembers(){
       <button class="ghost mini" style="margin-top:10px" data-act="sample">${t("loadSample")}</button></div>`;
 }
 
+function renderRooms(){
+  const box = document.getElementById("rooms");
+  state.rooms = state.rooms || [];
+  box.innerHTML = state.rooms.map(r => `
+    <div class="room-row" data-id="${r.id}">
+      <input type="text" class="nm" data-act="room-name" value="${esc(r.name)}" placeholder="${t("roomNamePh")}">
+      <input type="number" class="rent" inputmode="decimal" data-act="room-rent" value="${r.rent ? (r.rent/100) : ""}" min="0" step="0.01" placeholder="0" title="${t("rentLabel")}">
+      <select class="occ" data-act="room-occ" title="${t("occupantLabel")}">${occOptions(r.occupantId)}</select>
+      <button class="danger mini" data-act="room-del">${t("del")}</button>
+    </div>`).join("") || `<div class="empty">${t("roomEmpty")}</div>`;
+}
+function occOptions(sel){
+  return `<option value="">${t("occupantNone")}</option>` + state.members.map(m =>
+    `<option value="${m.id}" ${m.id === sel ? "selected" : ""}>${esc(m.name)}</option>`).join("");
+}
+function roomTag(b){
+  const missing = b.participants.filter(id => roomRentOf(id) === 0).length;
+  const sum = b.participants.reduce((s, id) => s + roomRentOf(id), 0);
+  return missing > 0
+    ? `<span class="tag warn" style="margin-top:8px;display:inline-block">${t("roomMissing").replace("{n}", missing)}</span>`
+    : `<span class="tag" style="margin-top:8px;display:inline-block">${t("roomOk").replace("{x}", fmt(sum))}</span>`;
+}
+
 function renderBills(){
   const box = document.getElementById("bills");
-  box.innerHTML = state.bills.map(b => `
+  box.innerHTML = state.bills.map(b => {
+    const roomSum = b.mode === "room" ? b.participants.reduce((s, id) => s + roomRentOf(id), 0) : null;
+    return `
     <div class="item" data-id="${b.id}">
       <div class="item-head">
         <input type="text" list="name-list" data-act="bill-name" value="${esc(b.name)}" placeholder="${t("billNamePh")}" style="font-weight:600;flex:1">
-        <span class="amt">${fmt(b.amount||0)}</span>
+        <span class="amt">${fmt(roomSum != null ? roomSum : (b.amount||0))}</span>
         <button class="danger mini" data-act="bill-del">${t("del")}</button>
       </div>
       <div class="grid cols-3" style="margin-top:10px">
-        <div class="field"><label>${t("amountLabel")}</label><input type="number" inputmode="decimal" data-act="bill-amount" value="${b.amount ? (b.amount/100) : ""}" min="0" step="0.01" placeholder="0.00"></div>
+        <div class="field"><label>${t("amountLabel")}</label><input type="number" inputmode="decimal" data-act="bill-amount" value="${b.amount ? (b.amount/100) : ""}" min="0" step="0.01" placeholder="0.00" ${b.mode === "room" ? `disabled title="${t("roomAutoTip")}"` : ""}></div>
         <div class="field"><label>${t("splitLabel")}</label><select data-act="bill-mode">${modeOptions(b.mode, true)}</select></div>
         <div class="field"><label>${t("payerLabel")}</label><select data-act="bill-payer">${payerOptions(b.payer)}</select></div>
       </div>
@@ -501,7 +647,9 @@ function renderBills(){
               <input type="number" inputmode="decimal" data-act="bill-share" data-mid="${id}" value="${b.shares && b.shares[id] ? (b.shares[id]/100) : ""}" min="0" step="0.01"></div>`).join("")}
         </div>
         <div style="margin-top:4px" data-sum>${customSumTag(b)}</div>` : ""}
-    </div>`).join("") ||
+      ${b.mode === "room" ? `<div style="margin-top:4px" data-sum>${roomTag(b)}</div>` : ""}
+    </div>`;
+  }).join("") ||
     `<div class="empty">${t("emptyBills")}</div>`;
 }
 
@@ -632,6 +780,7 @@ function encodeState(){
   const o = {
     month: state.month,
     m: state.members.map(x => [x.name, x.weight]),
+    r: (state.rooms || []).map(x => [x.name || "", x.rent || 0, idx(x.occupantId)]),
     b: state.bills.map(x => [x.name || "", x.amount || 0, x.mode, idx(x.payer), x.participants.map(idx),
       x.mode === "custom" ? x.participants.map(p => (x.shares || {})[p] || 0) : [] ]),
     t: state.meters.map(x => [x.name || "", x.prev, x.curr, x.price, x.mode, idx(x.payer), x.participants.map(idx)]),
@@ -641,7 +790,7 @@ function encodeState(){
 function decodeState(code){
   const o = JSON.parse(decodeURIComponent(atob(code)));
   const ids = (o.m || []).map(() => uid());
-  return {
+  const built = {
     month: o.month || nowMonth(),
     members: (o.m || []).map(([name, weight], i) => ({ id: ids[i], name: String(name), weight: +weight || 1 })),
     bills: (o.b || []).map(([name, amount, mode, payer, parts, shares]) => ({
@@ -657,7 +806,9 @@ function decodeState(code){
       payer: payer >= 0 ? ids[payer] : "",
       participants: (parts || []).filter(i => i >= 0).map(i => ids[i]),
     })),
+    rooms: (o.r || []).map(([name, rent, occ]) => ({ id: uid(), name, rent: +rent || 0, occupantId: occ >= 0 ? ids[occ] : "" })),
   };
+  return sanitizeState(built, built.month);
 }
 
 /* 月度总支出趋势(纯 SVG,无依赖) */
@@ -735,6 +886,7 @@ delegate(membersBox, btn => {
     mt.participants = mt.participants.filter(x => x !== id);
     if(mt.payer === id) mt.payer = "";
   });
+  (state.rooms || []).forEach(r => { if(r.occupantId === id) r.occupantId = ""; });
   save(); renderAll();
 });
 
@@ -742,6 +894,54 @@ document.getElementById("btn-add-member").onclick = () => {
   state.members.push({ id: uid(), name: t("memberDefault") + (state.members.length + 1), weight: 1 });
   save(); renderAll();
 };
+
+/* 批量添加租客 */
+document.getElementById("btn-batch-member").onclick = () => {
+  const box = document.getElementById("batch-box");
+  box.hidden = !box.hidden;
+  if(!box.hidden) document.getElementById("batch-input").focus();
+};
+document.getElementById("btn-batch-confirm").onclick = () => {
+  const raw = document.getElementById("batch-input").value;
+  const names = raw.split(/[\n\r,，、;；\t ]+/).map(s => s.trim()).filter(Boolean).slice(0, 30);
+  const fresh = names.filter(n => !state.members.some(m => m.name === n)).map(n => n.slice(0, 40));
+  document.getElementById("batch-input").value = "";
+  document.getElementById("batch-box").hidden = true;
+  if(!fresh.length){ toast(t("batchNone")); return; }
+  fresh.forEach(n => state.members.push({ id: uid(), name: n, weight: 1 }));
+  save(); renderAll();
+  toast(t("batchAdded").replace("{n}", fresh.length));
+};
+
+/* 房间 */
+document.getElementById("btn-add-room").onclick = () => {
+  (state.rooms = state.rooms || []).push({ id: uid(), name: "", rent: 0, occupantId: "" });
+  save(); renderAll();
+};
+const roomsBox = document.getElementById("rooms");
+roomsBox.addEventListener("input", e => {
+  const row = e.target.closest(".room-row"); if(!row) return;
+  const r = (state.rooms || []).find(x => x.id === row.dataset.id); if(!r) return;
+  if(e.target.dataset.act === "room-name") r.name = e.target.value;
+  if(e.target.dataset.act === "room-rent") r.rent = toCents(e.target.value);
+  save(); renderBills(); renderResult();
+});
+roomsBox.addEventListener("change", e => {
+  const row = e.target.closest(".room-row"); if(!row) return;
+  const r = (state.rooms || []).find(x => x.id === row.dataset.id); if(!r) return;
+  if(e.target.dataset.act === "room-occ"){
+    const occ = e.target.value;
+    // 一个住客同一时间只住一间:别的房间若已选他则清空
+    if(occ) state.rooms.forEach(x => { if(x.id !== r.id && x.occupantId === occ) x.occupantId = ""; });
+    r.occupantId = occ;
+    save(); renderAll();
+  }
+});
+delegate(roomsBox, btn => {
+  if(btn.dataset.act !== "room-del") return;
+  state.rooms = (state.rooms || []).filter(x => x.id !== btn.closest(".room-row").dataset.id);
+  save(); renderAll();
+});
 
 function wireToggleChips(box){
   box.addEventListener("click", e => {
@@ -791,7 +991,14 @@ billsBox.addEventListener("change", e => {
   const item = e.target.closest(".item"); if(!item) return;
   const b = state.bills.find(x => x.id === item.dataset.id); if(!b) return;
   const a = e.target.dataset.act;
-  if(a === "bill-mode") b.mode = e.target.value;
+  if(a === "bill-mode"){
+    // 从"按房间"切走时,把自动汇总的金额固化下来
+    if(b.mode === "room" && e.target.value !== "room"){
+      const sum = b.participants.reduce((s, id) => s + roomRentOf(id), 0);
+      if(sum > 0) b.amount = sum;
+    }
+    b.mode = e.target.value;
+  }
   if(a === "bill-payer") b.payer = e.target.value;
   save(); renderAll();
 });
@@ -881,8 +1088,8 @@ document.getElementById("history").addEventListener("click", e => {
   const btn = e.target.closest("[data-act]"); if(!btn) return;
   const mo = btn.dataset.mo;
   if(btn.dataset.act === "his-load"){
-    if(history[mo]){ state = JSON.parse(JSON.stringify(history[mo])); save();
-      monthInput.value = state.month; renderAll(); toast(`已载入 ${mo}`); }
+    if(history[mo]){ state = sanitizeState(JSON.parse(JSON.stringify(history[mo])), mo); save();
+      monthInput.value = state.month; renderAll(); toast(t("loaded").replace("{m}", mo)); }
   }
   if(btn.dataset.act === "his-del"){
     delete history[mo]; save(); renderAll();
@@ -902,9 +1109,8 @@ document.getElementById("file-import").addEventListener("change", e => {
   fr.onload = () => {
     try{
       const data = JSON.parse(fr.result);
-      if(!data || !Array.isArray(data.members)) throw new Error("bad");
-      state = { month: data.month || nowMonth(), members: data.members,
-        bills: data.bills || [], meters: data.meters || [] };
+      if(!data || typeof data !== "object") throw new Error("bad");
+      state = sanitizeState(data, state.month);
       save(); monthInput.value = state.month; renderAll(); toast(t("imported"));
     }catch(err){ toast(t("importFail")); }
   };
