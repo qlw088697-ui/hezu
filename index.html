@@ -9,6 +9,11 @@
 <meta name="description" content="合租费用分摊计算器:房租均摊/按权重、水电燃气抄表计费、垫付自动结算。纯前端,数据不上传。">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+<meta property="og:title" content="合租账本 HeZu — 合租费用分摊计算器">
+<meta property="og:description" content="房租按房间/权重、水电抄表、垫付结算,一键算清合租账并生成转账方案。纯前端单文件,数据只存本地。">
+<meta property="og:url" content="https://qlw088697-ui.github.io/hezu/">
+<meta property="og:image" content="https://qlw088697-ui.github.io/hezu/icons/icon-512.png">
+<meta name="twitter:card" content="summary">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#5b6cff">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -30,7 +35,7 @@
   .month-row{margin-top:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
   .month-row label{font-size:13px;opacity:.9;}
   input[type=month]{border:none;border-radius:8px;padding:7px 10px;font-size:14px;color:var(--text);background:var(--card);}
-  main{margin-top:-64px;padding:0 12px 40px;}
+  main{margin-top:-64px;padding:0 12px calc(40px + env(safe-area-inset-bottom));}
   section{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
     padding:18px;margin:14px 0;}
   h2{font-size:16px;margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
@@ -139,6 +144,7 @@
       <button class="primary mini" id="btn-add-member">＋ 添加租客</button>
       <button class="mini" id="btn-batch-member">⌨️ 批量</button></h2>
   <p class="hint" id="t-hint-members">权重用于"按权重"分摊:比如主卧 1.5、次卧 1。均摊模式不受权重影响。</p>
+  <p class="hint" id="dup-warn" hidden style="color:var(--warn)"></p>
   <div id="batch-box" hidden>
     <textarea id="batch-input" rows="3"></textarea>
     <div class="row-between" style="margin-top:6px">
@@ -220,7 +226,7 @@
 <script>
 "use strict";
 /* 版本号单一来源:页脚与导出文件名统一引用 */
-const APP_VERSION = "2.4";
+const APP_VERSION = "2.5";
 /* ---------- 多语言 ---------- */
 const I18N = {
   zh: {
@@ -278,6 +284,8 @@ const I18N = {
     importBackupConfirm: "该文件是全量备份,包含 {n} 个月的历史。导入将覆盖当前账单和全部历史,继续吗?",
     restoredAll: "已恢复全部数据(含 {n} 个月历史)✅",
     updateReady: "检测到新版本,刷新页面即可更新 🔄",
+    dupNamesWarn: "⚠️ 有 {n} 个重名成员({names}),会影响历史匹配与累计统计,建议改名",
+    backupRemind: "历史数据已超过一个月未备份,记得「⬇️ 全量备份」保存 💾",
     nativeShareBtn: "📤 分享到…",
     emptyHistory: "暂无历史月份,点\"保存本月到历史\"留存一份",
     copied: "已复制,去粘贴到群里吧 ✌️", copyFail: "复制失败,请手动选择文本",
@@ -359,6 +367,8 @@ const I18N = {
     importBackupConfirm: "This file is a full backup with {n} months of history. Importing will overwrite the current bill and ALL history. Continue?",
     restoredAll: "Everything restored (including {n} months of history) ✅",
     updateReady: "New version ready — refresh to update 🔄",
+    dupNamesWarn: "⚠️ {n} duplicate name(s) ({names}) — rename to keep history matching accurate",
+    backupRemind: "History hasn't been backed up for over a month — consider a full backup 💾",
     nativeShareBtn: "📤 Share…",
     emptyHistory: "No saved months yet — click \"Save this month\" to keep one",
     copied: "Copied! Paste it into the group ✌️", copyFail: "Copy failed, please select the text manually",
@@ -434,6 +444,28 @@ function uid(){
 function nowMonth(){ const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); }
 function blankState(){ return { month: nowMonth(), periodLabel: "", members: [], bills: [], meters: [], rooms: [] }; }
 
+/* 重名检测:重名会影响历史匹配与跨月累计 */
+function findDupNames(members){
+  const seen = {}, dups = [];
+  (members || []).forEach(m => {
+    const n = String(m && m.name || "").trim();
+    if(!n) return;
+    if(seen[n]){ if(!dups.includes(n)) dups.push(n); }
+    else seen[n] = true;
+  });
+  return dups;
+}
+/* 备份提醒:历史超过一个月未备份,或距上次备份超过 30 天 */
+function needsBackup(lastBackupAt, now, hs){
+  const months = Object.keys(hs || {}).filter(mo => /^\d{4}-\d{2}$/.test(mo));
+  if(!months.length) return false;
+  if(lastBackupAt && (now - lastBackupAt) <= 30 * 864e5) return false;
+  if(!lastBackupAt){
+    const oldest = Math.min(...months.map(mo => new Date(mo + "-01").getTime()));
+    return (now - oldest) > 30 * 864e5;
+  }
+  return true;
+}
 /* 数据消毒:任何来源(导入/分享链接/历史/本地存储)的数据先规范化,防畸形数据与注入 */
 function sanitizeState(raw, fallbackMonth){
   raw = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
@@ -846,6 +878,12 @@ function renderMembers(){
   const box = document.getElementById("members");
   document.getElementById("member-count").textContent =
     state.members.length ? state.members.length + t("peopleSuffix") : t("membersEmptyTag");
+  const dups = findDupNames(state.members);
+  const dupEl = document.getElementById("dup-warn");
+  if(dupEl){
+    dupEl.hidden = !dups.length;
+    if(dups.length) dupEl.textContent = t("dupNamesWarn").replace("{n}", dups.length).replace("{names}", dups.slice(0, 3).join("、"));
+  }
   box.innerHTML = state.members.map(m => `
     <div class="member-row" data-id="${m.id}">
       <input type="text" class="nm" data-act="member-name" value="${esc(m.name)}" placeholder="${t("namePh")}">
@@ -1556,6 +1594,7 @@ document.getElementById("btn-backup").onclick = () => {
     a.download = "hezu-backup-" + new Date().toISOString().slice(0, 10) + ".json";
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    try{ localStorage.setItem("hezu:lastBackup", String(Date.now())); }catch(e){}
     toast(t("backupDone"));
   }catch(e){ toast(t("copyFailShort")); }
 };
@@ -1690,6 +1729,12 @@ load();
   }catch(e){}
 })();
 renderAll();
+/* 备份提醒:有历史且超期未备份时温和提示一次 */
+try{
+  if(needsBackup(+localStorage.getItem("hezu:lastBackup") || 0, Date.now(), history)){
+    setTimeout(() => toast(t("backupRemind")), 1200);
+  }
+}catch(e){}
 /* 启动后的弹窗与工具交互 */
 document.getElementById("modal-close").onclick = closeDetail;
 document.getElementById("modal-mask").addEventListener("click", e => { if(e.target.id === "modal-mask") closeDetail(); });

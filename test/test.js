@@ -23,7 +23,7 @@ function makeApi(initState){
       setState: (s) => { state = s; },
       fmt, splitEqual, splitWeight, expenseOfBill, expenseOfMeter, computeAll,
       roomRentOf, sanitizeState, settlementCsv, copyBillsFromMonth, parseBackup, computeAllFor,
-      parseCsv, billsFromCsv, aggregateMonths, aggregateMonths,
+      parseCsv, billsFromCsv, aggregateMonths, findDupNames, needsBackup, aggregateMonths,
     };`);
 }
 const sampleState = {
@@ -279,6 +279,23 @@ api2.setState({ month: "2026-09", periodLabel: "租期 9/15–10/14", members: [
 api2.loadSample();
 assert(api2.stateRef().periodLabel === "租期 9/15–10/14", "载入示例不丢失周期说明");
 assert(api2.stateRef().members.length === 3, "载入示例数据完整");
+
+/* 重名检测 */
+const dups = api.findDupNames([
+  { id: "1", name: "张三" }, { id: "2", name: "张三" }, { id: "3", name: " 李四 " },
+  { id: "4", name: "李四" }, { id: "5", name: "王五" }, { id: "6", name: "" },
+]);
+assert(dups.length === 2 && dups[0] === "张三" && dups[1] === "李四", "重名检测(去空白后比较,空名忽略)");
+
+/* 备份提醒判定 */
+const NOW = new Date("2026-09-05T12:00:00Z").getTime();
+const histRecent = { "2026-09": { month: "2026-09", members: [], bills: [], meters: [] } };
+const histOld = { "2026-01": { month: "2026-01", members: [], bills: [], meters: [] } };
+assert(api.needsBackup(0, NOW, histRecent) === false, "仅当月数据且从未备份:不提醒");
+assert(api.needsBackup(0, NOW, histOld) === true, "一个月前历史从未备份:提醒");
+assert(api.needsBackup(NOW - 31 * 864e5, NOW, histRecent) === true, "上次备份超 30 天:提醒");
+assert(api.needsBackup(NOW - 5 * 864e5, NOW, histOld) === false, "最近备份过:不提醒");
+assert(api.needsBackup(0, NOW, {}) === false, "无历史:不提醒");
 
 console.log(failed === 0 ? "\n全部通过 ✅" : `\n${failed} 项失败 ❌`);
 process.exit(failed === 0 ? 0 : 1);
