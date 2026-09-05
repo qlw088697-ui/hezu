@@ -1,0 +1,15 @@
+{
+  "name": "合租账本 HeZu — 合租费用分摊计算器",
+  "short_name": "合租账本",
+  "description": "合租费用分摊计算器:均摊/按权重/抄表计费/垫付结算,数据仅存本地。",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#5b6cff",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

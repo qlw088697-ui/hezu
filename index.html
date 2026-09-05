@@ -6,6 +6,9 @@
 <title>合租账本 HeZu — 合租费用分摊计算器</title>
 <meta name="description" content="合租费用分摊计算器:房租均摊/按权重、水电燃气抄表计费、垫付自动结算。纯前端,数据不上传。">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#5b6cff">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <style>
   :root{
     --bg:#f4f6fb; --card:#ffffff; --line:#e6e9f2; --text:#1f2430; --muted:#7a8194;
@@ -151,12 +154,13 @@
       <input type="file" id="file-import" accept=".json,application/json" hidden>
       <button class="danger" id="btn-clear">清空本月</button>
     </div>
+    <div style="margin-top:8px" id="trend"></div>
     <div id="history" style="margin-top:8px"></div>
   </section>
 
 </main>
 
-<footer>HeZu · MIT License · 纯前端应用,所有数据仅保存在本地浏览器 ·
+<footer>HeZu v1.2 · MIT License · 纯前端应用,所有数据仅保存在本地浏览器 ·
   <a href="https://github.com/qlw088697-ui/hezu" target="_blank" rel="noopener">GitHub</a></footer>
 <div class="toast" id="toast"></div>
 
@@ -184,8 +188,18 @@ function save(){
 
 /* ---------- 工具 ---------- */
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-function toast(msg){ const t = document.getElementById("toast"); t.textContent = msg; t.classList.add("show");
-  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 1800); }
+function toast(msg, actionLabel, onAction){
+  const t = document.getElementById("toast");
+  t.innerHTML = esc(msg) + (actionLabel ? ` <a href="javascript:void(0)" id="toast-act">撤销</a>` : "");
+  if(actionLabel){
+    const a = t.querySelector("#toast-act");
+    a.style.cssText = "color:#9db1ff;text-decoration:underline;margin-left:6px;cursor:pointer";
+    a.onclick = () => { t.classList.remove("show"); onAction && onAction(); };
+  }
+  t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove("show"), actionLabel ? 6000 : 1800);
+}
 function memberById(id){ return state.members.find(m => m.id === id); }
 function memberName(id){ const m = memberById(id); return m ? m.name : "?"; }
 
@@ -287,7 +301,7 @@ function computeAll(){
 }
 
 /* ---------- 渲染 ---------- */
-function renderAll(){ renderMembers(); renderBills(); renderMeters(); renderResult(); renderHistory(); }
+function renderAll(){ renderMembers(); renderBills(); renderMeters(); renderResult(); renderHistory(); renderTrend(); renderDatalist(); }
 
 function memberChips(selected, onToggleAttr){
   if(!state.members.length) return `<span class="hint">先添加租客</span>`;
@@ -331,7 +345,7 @@ function renderBills(){
   box.innerHTML = state.bills.map(b => `
     <div class="item" data-id="${b.id}">
       <div class="item-head">
-        <input type="text" data-act="bill-name" value="${esc(b.name)}" placeholder="账单名称" style="font-weight:600;flex:1">
+        <input type="text" list="name-list" data-act="bill-name" value="${esc(b.name)}" placeholder="账单名称" style="font-weight:600;flex:1">
         <span class="amt">${fmt(b.amount||0)}</span>
         <button class="danger mini" data-act="bill-del">删除</button>
       </div>
@@ -360,7 +374,7 @@ function renderMeters(){
     return `
     <div class="item" data-id="${mt.id}">
       <div class="item-head">
-        <input type="text" data-act="meter-name" value="${esc(mt.name)}" placeholder="如:电费" style="font-weight:600;flex:1">
+        <input type="text" list="name-list" data-act="meter-name" value="${esc(mt.name)}" placeholder="如:电费" style="font-weight:600;flex:1">
         <span class="amt">${fmt(amount)}</span>
         <span class="tag warn" data-warn ${abnormal ? "" : "hidden"}>本期读数小于上期,请检查</span>
         <button class="danger mini" data-act="meter-del">删除</button>
@@ -505,6 +519,51 @@ function decodeState(code){
       participants: (parts || []).filter(i => i >= 0).map(i => ids[i]),
     })),
   };
+}
+
+/* 月度总支出趋势(纯 SVG,无依赖) */
+function renderTrend(){
+  const box = document.getElementById("trend");
+  const months = Object.keys(history).sort().slice(-12);
+  if(months.length < 2){ box.innerHTML = ""; return; }
+  const data = months.map(mo => {
+    const h = history[mo]; let total = 0;
+    (h.bills || []).forEach(b => total += b.amount || 0);
+    (h.meters || []).forEach(mt => {
+      if(mt.prev != null && mt.curr != null && mt.curr >= mt.prev)
+        total += Math.round(((mt.curr || 0) - (mt.prev || 0)) * (mt.price || 0) * 100);
+    });
+    return { mo, total };
+  });
+  const max = Math.max(...data.map(d => d.total), 1);
+  const W = 720, H = 180, pad = 8, bw = (W - pad * 2) / data.length;
+  const bars = data.map((d, i) => {
+    const h = Math.max(4, Math.round((H - 46) * d.total / max));
+    const x = pad + i * bw + 4, w = Math.max(10, bw - 8), y = H - 34 - h;
+    return `<g><title>${esc(d.mo)}:${fmt(d.total)}</title>
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="#5b6cff" opacity="${i === data.length - 1 ? 1 : 0.45}"></rect>
+      <text x="${x + w / 2}" y="${y - 6}" text-anchor="middle" font-size="11" fill="var(--muted)">${(d.total / 100).toFixed(0)}</text>
+      <text x="${x + w / 2}" y="${H - 16}" text-anchor="middle" font-size="11" fill="var(--muted)">${esc(d.mo.slice(5))}月</text></g>`;
+  }).join("");
+  box.innerHTML = `<div style="font-size:13px;color:var(--muted);margin:10px 0 2px">📈 月度总支出趋势</div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${bars}</svg>`;
+}
+
+/* 常用名称自动补全(来自当前 + 历史记录) */
+function renderDatalist(){
+  let box = document.getElementById("name-datalist-box");
+  if(!box){
+    box = document.createElement("div");
+    box.id = "name-datalist-box";
+    document.body.appendChild(box);
+  }
+  const names = new Set();
+  [state.bills, state.meters].forEach(list => list.forEach(x => x.name && names.add(x.name)));
+  Object.values(history).forEach(h => {
+    (h.bills || []).forEach(b => b.name && names.add(b.name));
+    (h.meters || []).forEach(mt => mt.name && names.add(mt.name));
+  });
+  box.innerHTML = `<datalist id="name-list">` + [...names].map(n => `<option value="${esc(n)}">`).join("") + `</datalist>`;
 }
 
 /* ---------- 事件 ---------- */
@@ -714,8 +773,12 @@ document.getElementById("file-import").addEventListener("change", e => {
 });
 document.getElementById("btn-clear").onclick = () => {
   if(!confirm("确定清空本月的全部数据吗?(历史记录不受影响)")) return;
+  const snapshot = state;
   state = blankState(); state.month = monthInput.value || nowMonth();
-  save(); monthInput.value = state.month; renderAll(); toast("已清空");
+  save(); monthInput.value = state.month; renderAll();
+  toast("已清空", "撤销", () => {
+    state = snapshot; save(); monthInput.value = state.month; renderAll(); toast("已恢复 ✅");
+  });
 };
 
 /* ---------- 启动 ---------- */
@@ -729,6 +792,10 @@ load();
   }catch(e){}
 })();
 renderAll();
+/* PWA:HTTPS 环境注册 Service Worker,支持离线与添加到主屏幕 */
+if("serviceWorker" in navigator && location.protocol === "https:"){
+  navigator.serviceWorker.register("./sw.js").catch(() => {});
+}
 </script>
 </body>
 </html>
