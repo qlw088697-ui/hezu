@@ -226,7 +226,7 @@
 <script>
 "use strict";
 /* 版本号单一来源:页脚与导出文件名统一引用 */
-const APP_VERSION = "2.9";
+const APP_VERSION = "3.0";
 /* ---------- 多语言 ---------- */
 const I18N = {
   zh: {
@@ -279,7 +279,7 @@ const I18N = {
     loadConfirm: "载入 {m} 将覆盖当前正在编辑的内容,继续吗?(可先\"保存本月到历史\"留存)",
     copyBtn: "复制账单",
     copyConfirm: "将 {m} 的账单和抄表结构复制到本月吗?本月现有的账单和抄表会被覆盖(成员按名字匹配,复制后可撤销)。",
-    copyDone: "已从 {m} 复制 {b} 笔账单、{t} 项抄表,请核对本读数",
+    copyDone: "已从 {m} 复制 {b} 笔账单、{t} 项抄表{r},请核对本读数",
     backupBtn: "⬇️ 全量备份", backupDone: "全量备份已下载 💾",
     importBackupConfirm: "该文件是全量备份,包含 {n} 个月的历史。导入将覆盖当前账单和全部历史,继续吗?",
     restoredAll: "已恢复全部数据(含 {n} 个月历史)✅",
@@ -363,7 +363,7 @@ const I18N = {
     loadConfirm: "Loading {m} will overwrite your current edits. Continue? (You can \"Save this month\" first)",
     copyBtn: "Copy bills",
     copyConfirm: "Copy {m}'s bills and meter structure into this month? Current bills/meters will be overwritten (members matched by name; you can undo).",
-    copyDone: "Copied {b} bills and {t} meters from {m} — please update the current readings",
+    copyDone: "Copied {b} bills and {t} meters{r} from {m} — please update the current readings",
     backupBtn: "⬇️ Full backup", backupDone: "Full backup downloaded 💾",
     importBackupConfirm: "This file is a full backup with {n} months of history. Importing will overwrite the current bill and ALL history. Continue?",
     restoredAll: "Everything restored (including {n} months of history) ✅",
@@ -788,7 +788,16 @@ function copyBillsFromMonth(src, dst){
       payer: mapId(mt.payer) || "",
       participants: participants.length ? participants : (dst.members || []).map(m => m.id) });
   });
-  return { bills, meters };
+  /* 当前没有房间时,把历史里的房间结构一并复制(住客按名字映射);已有则尊重现有配置 */
+  const rooms = [];
+  if(!(dst.rooms || []).length){
+    (src.rooms || []).forEach(r => {
+      if(!r || typeof r !== "object") return;
+      rooms.push({ id: uid(), name: r.name || "",
+        rent: Math.max(0, Math.round(r.rent || 0)), occupantId: mapId(r.occupantId) || "" });
+    });
+  }
+  return { bills, meters, rooms };
 }
 
 /* ---------- 渲染 ---------- */
@@ -1275,13 +1284,27 @@ membersBox.addEventListener("input", e => {
   updateDupWarn();
 });
 /* 在姓名输入框按回车,快速追加下一位租客并聚焦 */
+/* 聚焦某类名称输入框的最后一项(新增后直接开始输入) */
+function focusLast(sel){
+  const els = document.querySelectorAll(sel);
+  const el = els[els.length - 1];
+  if(el){ el.focus(); if(el.select) el.select(); }
+}
+/* 名称输入框回车 = 新增下一项并聚焦 */
+function wireEnterToAdd(box, nameAct, addBtnId, nameSel){
+  box.addEventListener("keydown", e => {
+    if(e.key === "Enter" && e.target.dataset && e.target.dataset.act === nameAct){
+      e.preventDefault();
+      document.getElementById(addBtnId).click();
+      focusLast(nameSel);
+    }
+  });
+}
 membersBox.addEventListener("keydown", e => {
   if(e.key === "Enter" && e.target.dataset && e.target.dataset.act === "member-name"){
     e.preventDefault();
     document.getElementById("btn-add-member").click();
-    const rows = document.querySelectorAll('[data-act="member-name"]');
-    const last = rows[rows.length - 1];
-    if(last){ last.focus(); last.select(); }
+    focusLast('[data-act="member-name"]');
   }
 });
 delegate(membersBox, btn => {
@@ -1305,6 +1328,7 @@ delegate(membersBox, btn => {
 document.getElementById("btn-add-member").onclick = () => {
   state.members.push({ id: uid(), name: t("memberDefault") + (state.members.length + 1), weight: 1 });
   save(); renderAll();
+  focusLast('[data-act="member-name"]');
 };
 
 /* 批量添加租客 */
@@ -1329,6 +1353,7 @@ document.getElementById("btn-batch-confirm").onclick = () => {
 document.getElementById("btn-add-room").onclick = () => {
   (state.rooms = state.rooms || []).push({ id: uid(), name: "", rent: 0, occupantId: "" });
   save(); renderAll();
+  focusLast('[data-act="room-name"]');
 };
 const roomsBox = document.getElementById("rooms");
 roomsBox.addEventListener("input", e => {
@@ -1389,6 +1414,7 @@ document.getElementById("btn-add-bill").onclick = () => {
   state.bills.push({ id: uid(), name: "", amount: 0, mode: "equal", shares: {},
     payer: "", participants: state.members.map(m => m.id) });
   save(); renderAll();
+  focusLast('[data-act="bill-name"]');
 };
 const billsBox = document.getElementById("bills");
 billsBox.addEventListener("input", e => {
@@ -1432,6 +1458,7 @@ document.getElementById("btn-add-meter").onclick = () => {
   state.meters.push({ id: uid(), name: "", prev: null, curr: null, price: null,
     mode: "equal", payer: "", participants: state.members.map(m => m.id) });
   save(); renderAll();
+  focusLast('[data-act="meter-name"]');
 };
 const metersBox = document.getElementById("meters");
 metersBox.addEventListener("input", e => {
@@ -1464,6 +1491,10 @@ delegate(metersBox, btn => {
   deleteWithUndo(() => { state.meters = state.meters.filter(x => x.id !== id); });
 });
 wireToggleChips(metersBox);
+/* 账单/抄表/房间名称框回车同样快速续录 */
+wireEnterToAdd(billsBox, "bill-name", "btn-add-bill", '[data-act="bill-name"]');
+wireEnterToAdd(metersBox, "meter-name", "btn-add-meter", '[data-act="meter-name"]');
+wireEnterToAdd(roomsBox, "room-name", "btn-add-room", '[data-act="room-name"]');
 
 /* 月份 */
 const monthInput = document.getElementById("month");
@@ -1719,8 +1750,13 @@ document.getElementById("history").addEventListener("click", e => {
     const snapshot = state;
     const copied = copyBillsFromMonth(src, state);
     state = { ...state, bills: copied.bills, meters: copied.meters };
+    let roomSuffix = "";
+    if(!(state.rooms || []).length && copied.rooms.length){
+      state.rooms = copied.rooms;
+      roomSuffix = (lang === "zh" ? "、" : ", ") + copied.rooms.length + (lang === "zh" ? " 个房间" : " room(s)");
+    }
     save(); renderAll();
-    toast(t("copyDone").replace("{m}", mo).replace("{b}", copied.bills.length).replace("{t}", copied.meters.length),
+    toast(t("copyDone").replace("{m}", mo).replace("{b}", copied.bills.length).replace("{t}", copied.meters.length).replace("{r}", roomSuffix),
       t("undo"), () => { state = snapshot; save(); renderAll(); toast(t("restored")); });
   }
   if(btn.dataset.act === "his-del"){

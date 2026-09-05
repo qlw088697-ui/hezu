@@ -165,6 +165,13 @@ const copied2 = api.copyBillsFromMonth(
   { month: "2026-09", members: [{ id: "d1", name: "李四" }], bills: [], meters: [] });
 assert(copied2.meters[0].participants.length === 1 && copied2.meters[0].participants[0] === "d1", "无匹配时抄表参与人回退为全部成员");
 
+/* 复制历史包含房间(住客按名字映射;当前已有房间则不覆盖) */
+const srcRooms = { members: [{ id: "s1", name: "A" }], rooms: [{ id: "r1", name: "主卧", rent: 150000, occupantId: "s1" }], bills: [], meters: [] };
+const cp1 = api.copyBillsFromMonth(srcRooms, { month: "2026-09", members: [{ id: "d1", name: "A" }], bills: [], meters: [], rooms: [] });
+assert(cp1.rooms.length === 1 && cp1.rooms[0].rent === 150000 && cp1.rooms[0].occupantId === "d1", "复制历史包含房间且住客按名字映射");
+const cp2 = api.copyBillsFromMonth(srcRooms, { month: "2026-09", members: [{ id: "d1", name: "A" }], bills: [], meters: [], rooms: [{ id: "dr", name: "已有", rent: 1, occupantId: "" }] });
+assert(cp2.rooms.length === 0, "当前已有房间时不复制覆盖");
+
 /* 全量备份信封解析 */
 const goodBackup = {
   app: "hezu", version: 1, exportedAt: "2026-09-05T00:00:00Z",
